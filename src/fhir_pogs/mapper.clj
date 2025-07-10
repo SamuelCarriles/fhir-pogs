@@ -1,12 +1,11 @@
 (ns fhir-pogs.mapper
-  (:require [cheshire.core :refer [parse-string generate-string]]
+  (:require [cheshire.core :refer [generate-string]]
             [honey.sql :as sql]
             [honey.sql.helpers :as help]
             [next.jdbc :as jdbc])
   (:import [org.postgresql.util PGobject]))
 
-
-(defn to-pg-obj "Crea un PGobject con el tipo y valor dados." 
+(defn to-pg-obj "Crea un PGobject con el tipo y valor dados."
   [^String type value]
   (when (some nil? [type value])
     (throw (IllegalArgumentException. "Some argument it's nil.")))
@@ -56,16 +55,26 @@
       (re-matches #"(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?" v)
       [:bytea (to-pg-obj "bytea" v)])))
 
+(defn create-main-table "Crea la sentencia SQL necesaria
+                         para crear la tabla principal donde
+                         se almacenarán los datos generales
+                         de cada recurso."
+  [^String table-name]
+  (-> (help/create-table (keyword (str table-name "_main")) :if-not-exists)
+      (help/with-columns [[:resource-id :text :primary-key :not-null]
+                          [:resourceType :text :not-null]
+                          [:content :jsonb :not-null]])
+      sql/format))
+
 (defn create-table "Devuelve una sentencia SQL para crear una tabla con los campos especificados. Recibe como primer argumento
    el nombre de la tabla y como segundo un mapa con los campos que se quieren extraer y el tipo de dato que almacenan. 
   \n Ejemplo de uso:\n ```clojure
    (create-table \"fhir_resources\" {:meta :jsonb :text :jsonb})\n => [\"CREATE TABLE IF NOT EXISTS fhir_resources (id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL, meta JSONB, text JSONB)\"]"
-  [^String main-table-name fields]
-  (let [default-columns [[:id :text :primary-key :not-null]
-                         [:resourceType :text :not-null]
-                         [:content :jsonb :not-null]]
-        columns (into default-columns fields)]
-    (-> (help/create-table (keyword main-table-name) :if-not-exists)
+  [^String table-name ^String restype fields]
+  (let [columns (into
+                 [[:id :text :primary-key :not-null [:references (keyword (str table-name "_main")) :resource-id] :on-delete-cascade]]
+                 fields)]
+    (-> (help/create-table (keyword (str table-name "_" restype)) :if-not-exists)
         (help/with-columns columns)
         sql/format)))
 
@@ -73,20 +82,23 @@
                 para insertar en la base de datos los
                 campos que se quieren mapear del recurso FHIR.
                 \n - `table-name`: el nombre de la tabla donde
-                serán insertados los campos.\n - `resource`: 
-                recurso FHIR llevado a un mapa clojure.\n - `fields`:
-                un vector con los campos que se desean mapear en la base de datos."
-  [^String table-name resource fields]
+                serán insertados los campos.\n - `fields`:
+                un vector con los campos que se desean mapear 
+                en la base de datos.\n - `resource`: 
+                recurso FHIR llevado a un mapa clojure."
+  [^String table-name fields resource]
   (let [f (set (conj fields :id :resourceType))]
-    (-> {:main-table table-name}
+    (-> {:table table-name}
         (assoc :fields
                (-> (remove nil?
                            (mapv
                             (fn [[n v]]
-                              (let [type (type-of v)
-                                    value (second type)]
-                                {:name n
-                                 :value value}))
+                              (if (= n :id)
+                                {:name n :value v}
+                                (let [type (type-of v)
+                                      value (second type)]
+                                  {:name n
+                                   :value value})))
                             (reduce (fn [o entry]
                                       (if (contains? f (key entry))
                                         (conj o entry) o))
@@ -99,29 +111,48 @@
                           para insertar todos los datos de `template`
                           en su respectiva tabla.\n - `template`: mapa 
                           que resulta de aplicar la fn `template`."
-  [template]
-  (let [main-table (:main-table template)
+  [template ^String restype]
+  (let [table (:table template)
         fields (:fields template)]
     (->> (reduce (fn [o {:keys [name value]}]
-                   (assoc-in o [(keyword main-table) name] value))
+                   (let [t (keyword (if (or (= name :id)
+                                            (= name :resourceType)
+                                            (= name :content))
+                                      (str table "_main")
+                                      (str table "_" restype)))
+                         n (if (and (= t (keyword (str table "_main")))
+                                    (= name :id))
+                             :resource-id name)
+                         result (assoc-in o [t n] value)]
+                     (if (= :id name) (assoc-in result [(keyword (str table "_" restype)) :id] value) result)))
                  {} fields)
          (map (fn [[n v]] (-> (help/insert-into n)
                               (help/values [v])
-                              (sql/format)))))))
-
+                              (sql/format))))
+         (conj))))
+;;Arreglar esto
 (defn fields-types "Retorna un mapa donde cada clave es
                     un campo y su valor asociado es el tipo
-                    de dato de ese campo.\n - `fields`: un vector 
+                    de dato de ese campo.\n - `f`: un vector 
                     con los campos de los que se desea conocer 
-                    el tipo de dato que almacenan.\n - `r`: el recurso
-                   FHIR llevado a un mapa clojure."
-  [fields r]
-  (reduce (fn [x y]
-            (if (get r y) (assoc x y (first (type-of (get r y)))) x))
-          {} (set (if (some #(= % :defaults) fields)
-                    (conj (remove #(= % :defaults) fields)
-                          :meta :text)
-                    fields))))
+                    el tipo de dato que almacenan. Dentro de
+                    este vector pueden existir mapas para los
+                    campos que no aparecen en el recurso, donde
+                    cada clave es un campo, y el  valor es el
+                    tipo de dato. Tanto clave como valor son `keywords`.
+                    \n - `r`: el recurso FHIR llevado a un mapa clojure."
+  [f r]
+  (let [final (apply merge (filter map? f))
+        fields (remove map? f)]
+    (merge final (reduce (fn [x y]
+                           (if-let [value (if (vector? r) (some (fn [x] (when (contains? x y) (get x y))) r)
+                                              (get r y))]
+                             (assoc x y (first (type-of value)))
+                             x))
+                         {} (set (if (some #(= % :defaults) fields)
+                                   (conj (remove #(= % :defaults) fields)
+                                         :meta :text)
+                                   fields))))))
 
 (defn jdbc-execute! "Obtiene el datasource correspondiente al db-spec,
                      se conecta a la base de datos y
@@ -135,7 +166,8 @@
                     datos. Por ejemplo :\n {:dbtype \"postgresql\", :dbname \"resources\", :host \"localhost\", :user \"postgres\", :port \"5432\", :password \"postgres\"}\n - `table-name`: el nombre de la tabla donde se desea mapear el recurso.
                     \n - `mapping-fields`: un vector con el 
                     nombre de los campos del recurso que se quieren
-                    mapear. Los nombres se dan en formato de `keyword`.
+                    mapear. Los nombres se dan en formato de `keyword`. Se debe tener en cuenta que el recurso
+                    tiene que tener cada campo que se desee mapear.
                     Por ejemplo : `[:meta :text :active :deceased]`.
                     \n - `resource`: el recurso FHIR llevado a un mapa clojure.
                     \n Ejemplo de uso:\n ```clojure\n (def test-1 (parse-string <json resource> true))
@@ -152,5 +184,17 @@
   (map #(map-resource db-spec \"fhir_resources\" [:defaults :active] %) [test-1 test-2 test-3])"
   [db-spec ^String table-name mapping-fields resource]
   (let [fields (fields-types mapping-fields resource)]
-    (jdbc-execute! db-spec (create-table table-name fields))
-    (map #(jdbc-execute! db-spec %) (insert-to-sentence (template table-name resource (keys fields))))))
+    (jdbc-execute! db-spec (create-main-table table-name))
+    (jdbc-execute! db-spec (create-table  table-name (:resourceType resource) fields))
+    (map #(jdbc-execute! db-spec %) (insert-to-sentence (template table-name (keys fields) resource) (:resourceType resource)))))
+
+(defn map-resources "Trabaja my parecido a `map-resource`, la diferencia es que
+                     maneja varios recursos y no solamente uno. Los recursos pueden
+                     tener dos tipos de mapping:\n - `:single`: todos los recursos
+                     son de un mismo tipo, por lo que se pueden insertar en una tabla única. 
+                     Para este tipo el parámetro `mapping-fields` es un vector de campos en 
+                     formato `keyword.`\n - `:specialized`: los recursos son de varios tipos, por lo que
+                     se crea una tabla diferente para cada tipo de recurso. Para este tipo, `mapping-fields`
+                      es un mapa donde las claves son el tipo de recurso y los valores son vectores
+                     que contienen los campos en formato `keyword`."
+  [db-spec ^String table-name mapping-type mapping-fields resources])
