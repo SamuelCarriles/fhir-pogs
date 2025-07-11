@@ -226,14 +226,3 @@
     :else
     (throw (IllegalArgumentException. (str "The mapping-type is incorrect. The type " mapping-type " doesn't exist.")))))
 
-
-
-(comment
-  #_(let [fields (fields-types mapping-fields resources)]
-      (jdbc-execute! db-spec (create-table table-name))
-      (map (fn [x]
-             (let [restype (:resourceType x)]
-               (jdbc-execute! db-spec (create-table  table-name restype fields))
-               (map #(jdbc-execute! db-spec %) (insert-to-sentence (template table-name (keys fields) x) restype))))
-           resources))
-  :.)
