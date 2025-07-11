@@ -55,28 +55,24 @@
       (re-matches #"(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?" v)
       [:bytea (to-pg-obj "bytea" v)])))
 
-(defn create-main-table "Crea la sentencia SQL necesaria
-                         para crear la tabla principal donde
-                         se almacenarán los datos generales
-                         de cada recurso."
-  [^String table-name]
-  (-> (help/create-table (keyword (str table-name "_main")) :if-not-exists)
-      (help/with-columns [[:resource-id :text :primary-key :not-null]
-                          [:resourceType :text :not-null]
-                          [:content :jsonb :not-null]])
-      sql/format))
+(defn create-table "Devuelve una sentencia SQL para crear una tabla con los campos especificados. Si se llama la fn con un solo argumento creará la la tabla principal donde
+                    se almacenarán los datos generales de cada recurso.\n - `table-name`: nombre base de la tabla. \n - `restype`: tipo de recurso que almacenará. \n - `fields`: 
+                    un mapa con los campos que se quieren extraer y el tipo de dato que almacenan. 
+                    \n Ejemplo de uso:\n ```clojure \n(create-table \"fhir_resources\")\n;; => [\"CREATE TABLE IF NOT EXISTS fhir_resources_main (resource_id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL)\"] \n(create-table \"fhir_resources\" \"Patient\" {:meta :jsonb :text :jsonb})\n;; => [\"CREATE TABLE IF NOT EXISTS fhir_resources_Patient (id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL, meta JSONB, text JSONB)\"]"
+  ([^String table-name]
+   (-> (help/create-table (keyword (str table-name "_main")) :if-not-exists)
+       (help/with-columns [[:resource-id :text :primary-key :not-null]
+                           [:resourceType :text :not-null]
+                           [:content :jsonb :not-null]])
+       sql/format))
 
-(defn create-table "Devuelve una sentencia SQL para crear una tabla con los campos especificados. Recibe como primer argumento
-   el nombre de la tabla y como segundo un mapa con los campos que se quieren extraer y el tipo de dato que almacenan. 
-  \n Ejemplo de uso:\n ```clojure
-   (create-table \"fhir_resources\" {:meta :jsonb :text :jsonb})\n => [\"CREATE TABLE IF NOT EXISTS fhir_resources (id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL, meta JSONB, text JSONB)\"]"
-  [^String table-name ^String restype fields]
-  (let [columns (into
-                 [[:id :text :primary-key :not-null [:references (keyword (str table-name "_main")) :resource-id] :on-delete-cascade]]
-                 fields)]
-    (-> (help/create-table (keyword (str table-name "_" restype)) :if-not-exists)
-        (help/with-columns columns)
-        sql/format)))
+  ([^String table-name ^String restype fields]
+   (let [columns (into
+                  [[:id :text :primary-key :not-null [:references (keyword (str table-name "_main")) :resource-id] :on-delete-cascade]]
+                  fields)]
+     (-> (help/create-table (keyword (str table-name "_" restype)) :if-not-exists)
+         (help/with-columns columns)
+         sql/format))))
 
 (defn template "Crea un mapa que servirá de plantilla
                 para insertar en la base de datos los
@@ -124,13 +120,15 @@
                                     (= name :id))
                              :resource-id name)
                          result (assoc-in o [t n] value)]
-                     (if (= :id name) (assoc-in result [(keyword (str table "_" restype)) :id] value) result)))
+                     (if (= :id name)
+                       (assoc-in result [(keyword (str table "_" restype)) :id] value)
+                       result)))
                  {} fields)
          (map (fn [[n v]] (-> (help/insert-into n)
                               (help/values [v])
                               (sql/format))))
-         (conj))))
-;;Arreglar esto
+         (sort-by (fn [x] (not (re-find #"_main" (first x))))))))
+
 (defn fields-types "Retorna un mapa donde cada clave es
                     un campo y su valor asociado es el tipo
                     de dato de ese campo.\n - `f`: un vector 
@@ -183,10 +181,11 @@
 
   (map #(map-resource db-spec \"fhir_resources\" [:defaults :active] %) [test-1 test-2 test-3])"
   [db-spec ^String table-name mapping-fields resource]
-  (let [fields (fields-types mapping-fields resource)]
-    (jdbc-execute! db-spec (create-main-table table-name))
-    (jdbc-execute! db-spec (create-table  table-name (:resourceType resource) fields))
-    (map #(jdbc-execute! db-spec %) (insert-to-sentence (template table-name (keys fields) resource) (:resourceType resource)))))
+  (let [fields (fields-types mapping-fields resource)
+        restype (:resourceType resource)]
+    (jdbc-execute! db-spec (create-table table-name))
+    (jdbc-execute! db-spec (create-table  table-name restype fields))
+    (map #(jdbc-execute! db-spec %) (insert-to-sentence (template table-name (keys fields) resource) restype))))
 
 (defn map-resources "Trabaja my parecido a `map-resource`, la diferencia es que
                      maneja varios recursos y no solamente uno. Los recursos pueden
@@ -197,4 +196,18 @@
                      se crea una tabla diferente para cada tipo de recurso. Para este tipo, `mapping-fields`
                       es un mapa donde las claves son el tipo de recurso y los valores son vectores
                      que contienen los campos en formato `keyword`."
-  [db-spec ^String table-name mapping-type mapping-fields resources])
+  [db-spec ^String table-name mapping-type mapping-fields resources]
+  (cond 
+    (= :single mapping-type)
+    (map #(map-resource db-spec table-name mapping-fields %) resources)
+    (= :specialized mapping-type)
+    (let [fields (fields-types mapping-fields resources)]
+      (jdbc-execute! db-spec (create-table table-name))
+      (map (fn [x] 
+             (let [restype (:resourceType x)] 
+               (jdbc-execute! db-spec (create-table  table-name restype fields))
+               (map #(jdbc-execute! db-spec %) (insert-to-sentence (template table-name (keys fields) x) restype))))
+           resources))
+    :else 
+    (throw (IllegalArgumentException. (str "The mapping-type is incorrect. The type " mapping-type "doesn't exist.")))))
+;; Arreglar
