@@ -135,11 +135,12 @@
                     con los campos de los que se desea conocer 
                     el tipo de dato que almacenan. Dentro de
                     este vector pueden existir mapas para los
-                    campos que no aparecen en el recurso, donde
+                    campos que no aparecen en el recurso pero que 
+                    aún así se desean crear en la tabla, donde
                     cada clave es un campo, y el  valor es el
                     tipo de dato. Tanto clave como valor son `keywords`.
-                    \n - `r`: el recurso FHIR llevado a un mapa clojure."
-  [f r]
+                    \n - `r`: el recurso FHIR llevado a un mapa clojure." 
+  ([f r]
   (let [final (apply merge (filter map? f))
         fields (remove map? f)]
     (merge final (reduce (fn [x y]
@@ -150,7 +151,7 @@
                          {} (set (if (some #(= % :defaults) fields)
                                    (conj (remove #(= % :defaults) fields)
                                          :meta :text)
-                                   fields))))))
+                                   fields)))))))
 
 (defn jdbc-execute! "Obtiene el datasource correspondiente al db-spec,
                      se conecta a la base de datos y
@@ -165,8 +166,10 @@
                     \n - `mapping-fields`: un vector con el 
                     nombre de los campos del recurso que se quieren
                     mapear. Los nombres se dan en formato de `keyword`. Se debe tener en cuenta que el recurso
-                    tiene que tener cada campo que se desee mapear.
-                    Por ejemplo : `[:meta :text :active :deceased]`.
+                    tiene que tener cada campo que se desee mapear. Si se quiere añadir
+                    un campo a la tabla que no está en el recurso para un uso posterior quizá,
+                    dentro del vector se puede escribir un mapa donde la clave es el nombre del campo y el valor
+                    es el tipo de dato que guardará ese campo.Algunos ejemplos : `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`.
                     \n - `resource`: el recurso FHIR llevado a un mapa clojure.
                     \n Ejemplo de uso:\n ```clojure\n (def test-1 (parse-string <json resource> true))
   (def test-2 (parse-string <json resource> true))
@@ -195,19 +198,42 @@
                      formato `keyword.`\n - `:specialized`: los recursos son de varios tipos, por lo que
                      se crea una tabla diferente para cada tipo de recurso. Para este tipo, `mapping-fields`
                       es un mapa donde las claves son el tipo de recurso y los valores son vectores
-                     que contienen los campos en formato `keyword`."
+                     que contienen los campos en formato `keyword`. Existen dos `keywords` reservadas: `:all` y `:others`.
+                     La primera se usa cuando se quieren dar los campos a extraer de todos los recursos, y la
+                     segunda cuando se han dado ya tipos de recursos con sus campos y se quiere especificar
+                     qué campos extraer de cualquier otro tipo de recurso. Se recomienda siempre poner `:others`, pero
+                     en caso de no estar y encnotrarse un recurso de un tipo no especificado, se mapearán los campos básicos en 
+                     la tabla principal o controladora. Con campos básicos me refiero a `:id`, `:resourceType` y `:content`.\n 
+                     Ejemplo de llamada de la fn: \n```clojure \n(map-resources db-spec \"fhir_reources\" :single [:defaults] <resources>) \n(map-resources db-spec \"fhir_resources_database\" :specialized {:all [:text]} <resources>)"
   [db-spec ^String table-name mapping-type mapping-fields resources]
   (cond 
     (= :single mapping-type)
-    (map #(map-resource db-spec table-name mapping-fields %) resources)
+    (do (when (not-every? #(= (:resourceType (first resources)) (:resourceType %)) resources)
+          (throw (IllegalArgumentException. (str "Not every resources are " (:resourceType (first resources)) ", you should use :specialized mapping type."))))
+      (map #(map-resource db-spec table-name [(fields-types mapping-fields resources)] %) resources))
     (= :specialized mapping-type)
-    (let [fields (fields-types mapping-fields resources)]
+    (do (jdbc-execute! db-spec (create-table table-name))
+        (map (fn [r]
+               (let [restype (:resourceType r)
+                     restype-key (keyword (.toLowerCase restype))
+                     fields (fields-types (if-let [f (:all mapping-fields)]
+                                            f (if-let [fi (restype-key mapping-fields)]
+                                                fi (if-let [fid (:others mapping-fields)]
+                                                     fid []))) resources)]
+                 (jdbc-execute! db-spec (create-table  table-name restype fields))
+                 (map #(jdbc-execute! db-spec %) (insert-to-sentence (template table-name (keys fields) r) restype))))
+             resources))
+    :else
+    (throw (IllegalArgumentException. (str "The mapping-type is incorrect. The type " mapping-type " doesn't exist.")))))
+
+
+
+(comment
+  #_(let [fields (fields-types mapping-fields resources)]
       (jdbc-execute! db-spec (create-table table-name))
-      (map (fn [x] 
-             (let [restype (:resourceType x)] 
+      (map (fn [x]
+             (let [restype (:resourceType x)]
                (jdbc-execute! db-spec (create-table  table-name restype fields))
                (map #(jdbc-execute! db-spec %) (insert-to-sentence (template table-name (keys fields) x) restype))))
            resources))
-    :else 
-    (throw (IllegalArgumentException. (str "The mapping-type is incorrect. The type " mapping-type "doesn't exist.")))))
-;; Arreglar
+  :.)
