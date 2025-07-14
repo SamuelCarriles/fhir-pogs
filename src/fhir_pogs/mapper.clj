@@ -120,10 +120,10 @@
                                     (= name :id))
                              :resource-id name)
                          result (assoc-in o [t n] value)]
-                     (if (= :id name)
+                     (if (and (> (count fields) 3) (= :id name))
                        (assoc-in result [(keyword (str table "_" restype)) :id] value)
                        result)))
-                 {} fields)
+                 {} fields) 
          (map (fn [[n v]] (-> (help/insert-into n)
                               (help/values [v])
                               (sql/format))))
@@ -139,19 +139,19 @@
                     aún así se desean crear en la tabla, donde
                     cada clave es un campo, y el  valor es el
                     tipo de dato. Tanto clave como valor son `keywords`.
-                    \n - `r`: el recurso FHIR llevado a un mapa clojure." 
+                    \n - `r`: el recurso FHIR llevado a un mapa clojure."
   ([f r]
-  (let [final (apply merge (filter map? f))
-        fields (remove map? f)]
-    (merge final (reduce (fn [x y]
-                           (if-let [value (if (vector? r) (some (fn [x] (when (contains? x y) (get x y))) r)
-                                              (get r y))]
-                             (assoc x y (first (type-of value)))
-                             x))
-                         {} (set (if (some #(= % :defaults) fields)
-                                   (conj (remove #(= % :defaults) fields)
-                                         :meta :text)
-                                   fields)))))))
+   (let [final (apply merge (filter map? f))
+         fields (remove map? f)]
+     (merge final (reduce (fn [x y]
+                            (if-let [value (if (vector? r) (some (fn [x] (when (contains? x y) (get x y))) r)
+                                               (get r y))]
+                              (assoc x y (first (type-of value)))
+                              x))
+                          {} (set (if (some #(= % :defaults) fields)
+                                    (conj (remove #(= % :defaults) fields)
+                                          :meta :text)
+                                    fields)))))))
 
 (defn jdbc-execute! "Obtiene el datasource correspondiente al db-spec,
                      se conecta a la base de datos y
@@ -206,11 +206,11 @@
                      la tabla principal o controladora. Con campos básicos me refiero a `:id`, `:resourceType` y `:content`.\n 
                      Ejemplo de llamada de la fn: \n```clojure \n(map-resources db-spec \"fhir_reources\" :single [:defaults] <resources>) \n(map-resources db-spec \"fhir_resources_database\" :specialized {:all [:text]} <resources>)"
   [db-spec ^String table-name mapping-type mapping-fields resources]
-  (cond 
+  (cond
     (= :single mapping-type)
     (do (when (not-every? #(= (:resourceType (first resources)) (:resourceType %)) resources)
           (throw (IllegalArgumentException. (str "Not every resources are " (:resourceType (first resources)) ", you should use :specialized mapping type."))))
-      (map #(map-resource db-spec table-name [(fields-types mapping-fields resources)] %) resources))
+        (map #(map-resource db-spec table-name [(fields-types mapping-fields resources)] %) resources))
     (= :specialized mapping-type)
     (do (jdbc-execute! db-spec (create-table table-name))
         (map (fn [r]
