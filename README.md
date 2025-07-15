@@ -46,7 +46,7 @@ Aquí vemos como se almacena un recurso de tipo `Patient`  a la base de datos es
 - `resource`: el recurso FHIR llevado a un mapa clojure.
 
 > [!NOTE]
->  Un detalle interesante es que dentro del vector que contiene los campos almacenar, se puede utilizar el keyword reservado `:defaults`, que indicará que se extraigan los campos `meta` y `text` del recurso.
+>  *Un detalle interesante es que dentro del vector que contiene los campos almacenar, se puede utilizar el keyword reservado `:defaults`, que indicará que se extraigan los campos `meta` y `text` del recurso.*
 
 Veamos las tablas que resultan de este ejemplo:
 
@@ -96,10 +96,10 @@ Para esta función los argumentos cambian ligeramente:
   - `resources`: es una colección de recursos que se desean almacenar.
 
 > [!IMPORTANT]
-> Las tablas resultantes de este ejemplo dependen de los recursos que se tengan, pero de manera general, para el mapeo `:single` se tendrá una tabla principal con columnas `id`, `resourcetype` y `content`, y una tabla secundaria con columnas `resource_id`, `active` y `text`; para el mapeo `specialized` se tiene la misma tabla principal, una tabla secundaria que almacenará recursos tipo `Patient` con columnas `active` y `text`, y se tendrán tantas tablas con campos `meta` y `text` como sean necesarias.
+> *Las tablas resultantes de este ejemplo dependen de los recursos que se tengan, pero de manera general, para el mapeo `:single` se tendrá una tabla principal con columnas `id`, `resourcetype` y `content`, y una tabla secundaria con columnas `resource_id`, `active` y `text`; para el mapeo `specialized` se tiene la misma tabla principal, una tabla secundaria que almacenará recursos tipo `Patient` con columnas `active` y `text`, y se tendrán tantas tablas con campos `meta` y `text` como sean necesarias.*
 
 > [!TIP] 
-> Por cada tipo diferente de recurso que se tenga, se genera una tabla diferente. Esto se hace con el objetivo de que los recursos de un mismo tipo estén almacenados en una misma tabla. 
+> *Por cada tipo diferente de recurso que se tenga, se genera una tabla diferente. Esto se hace con el objetivo de que los recursos de un mismo tipo estén almacenados en una misma tabla.* 
 ## 📈Estado: En desarrollo
 
 Esta librería está en fase activa de desarrollo. Algunas funciones pueden cambiar y nuevas características están por venir.
