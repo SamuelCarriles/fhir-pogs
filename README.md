@@ -13,13 +13,14 @@ El funcionamiento de la librería se resume así:
 1. Se toma el recurso o los recursos a almacenar y los campos que se desean extraer.
 2. Se crea una tabla principal donde se guarda el id, el tipo de recurso y el recurso completo en formato JSONB en las columnas `id`, `resourcetype` y `content` respectivamente.
 3. En una tabla aparte se guardan los otros campos que se decidieron extraer, además del id del recurso, que se usa como clave foránea para refernciar los datos de la tabla que se crea con la tabla principal que almacena todos los recursos. Si el campo del  recurso es un dato primitivo de FHIR, se almacena en una columna de un tipo de dato Postgres que pueda contenerlo, en caso contrario, se almacena en una columna JSONB.
-4. Con los datos almacenados se pueden utilizar las funciones ubicadas en el namespace `core` para hacer las consultas básicas o las de `jquerier` para consultas avanzadas sobre los campos JSONB.
+4. Con los datos almacenados ya es posible realizar consultas básicas con filtros simples, o consultas semi-avanzadas en campos JSONB utilizando las funciones ubicadas en el namespace `querier`.
 
 ## 🛠️Operaciones Básicas: Crear/almacenar recursos
 
 ### Ejemplo de uso para un solo recurso FHIR: `map-resource`
 ```clj
-(:require [fhir-pogs.mapper :refer [map-resource]])
+(:require [fhir-pogs.core :refer [parse-resource]]
+          [fhir-pogs.mapper :refer [map-resource]])
 
 (def db-spec {:dbtype "postgresql"
               :dbname "resources"
@@ -28,10 +29,15 @@ El funcionamiento de la librería se resume así:
               :password "postgres"
               :port "5432"})
 
-(map-resource db-spec "fhir_resources" [:defaults] {:id "example" 
-                                                    :resourceType "Patient" 
-                                                    :text {:status "generated"
-                                                           :div "<div xmlns=\"http://www.w3.org/1999/xhtml\">\n      \n      <p>Patient Donald DUCK @ Acme Healthcare, Inc. MR = 654321</p>\n    \n    </div>"}})
+(def resource (parse-resource "{\n  \"resourceType\": \"Patient\",\n  \"id\": \"exampl\",\n  \"text\": {\n    \"status\": \"generated\",\n    \"div\": \"<div xmlns=\\\"http://www.w3.org/1999/xhtml\\\">\\n\\t\\t\\t<table>\\n\\t\\t\\t\\t<tbody>\\n\\t\\t\\t\\t\\t<tr>\\n\\t\\t\\t\\t\\t\\t<td>Name</td>\\n\\t\\t\\t\\t\\t\\t<td>Peter James \\n              <b>Chalmers</b> (&quot;Jim&quot;)\\n</td>\\n\\t\\t\\t\\t\\t</tr>\\n\\t\\t\\t\\t\\t</div>\"\n  },\n  \"active\": true,\n  \"deceasedBoolean\": false\n}\n"))
+;;=> {:id "example",
+;;    :resourceType "Patient",
+;;    :text {:status "generated",
+;;           :div "<div xmlns=\"http://www.w3.org/1999/xhtml\">\n\t\t\t<table>\n\t\t\t\t<tbody>\n\t\t\t\t\t<tr>\n\t\t\t\t\t\t<td>Name</td>\n\t\t\t\t\t\t<td>Peter James \n              <b>Chalmers</b> (&quot;Jim&quot;)\n</td>\n\t\t\t\t\t</tr>\n\t\t\t\t\t</div>"},
+;;  :active true,
+;;  :deceasedBoolean false}
+
+(map-resource db-spec "fhir_resources" [:defaults] resource)
 ```
 Aquí vemos como se almacena un recurso de tipo `Patient`  a la base de datos especificada en el `db-spec`. Se utiliza la función `map-resource` para mapear este recurso dentro de la base de datos. Esta función acepta los siguientes parámetros en orden:
 - `db-spec`: las especificaciones de la base de datos en la que se almacenará el recurso. Estas especificaciones son usadas por `next.jdbc` para hacer las conexiones y ejecutar las operaciones necesarias.
@@ -59,7 +65,7 @@ Tabla *fhir_resources_patient*
 ---
 Como el recurso no tenía `:meta` no se extrajo.
 
- Esta función es solamente para almacenar un recurso, por lo que si se van a almacenar varios recursos es mejor utilizar su versión mejorada: `map-resources`.
+ Esta función es solamente para almacenar un recurso, por lo que si se van a almacenar varios recursos la indicada es `map-resources`.
 
 ### Ejemplo de uso para varios recursos FHIR: `map-resources`
 Supongamos que ya tenemos una colección de recursos llamada `resources`. Para almacenarlos en una base de datos PostgreSQL tenemos que utilizar la función `map-resources` que hemos comentado en el segmento anterior. Veamos un ejemplo de su uso:
