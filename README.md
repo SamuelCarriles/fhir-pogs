@@ -3,21 +3,21 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.5-blue?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![License : MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 # FHIR POGS - PostgreSQL + FHIR + Clojure
-Clojure library to map FHIR resources to PostgreSQL.
+Clojure library to map FHIR resources to PostgreSQL and interact with them.  
 ## 📑About Library
-FHIR POGS es una librería clojure que tiene como objetivo dotar al usuario de la capacidad de almacenar recursos FHIR en una base de datos Postgres e interactuar con ellos a través de operaciones básicas como **C**reate, **R**ead, **U**pdate y **D**elete (**CRUD**) y consultas sencillas sobre los campos extraídos del recurso o avanzadas sobre campos JSONB.
+FHIR POGS is a Clojure library that aims to provide users with the capability to store FHIR resources in a PostgreSQL database and interact with them through **CRUD** operations (**C**reate, **R**ead, **U**pdate, and **D**elete), as well as simple queries on extracted resource fields or advanced queries on JSONB fields.
 
-## ⚙️Funcionamiento
-El funcionamiento de la librería se resume así:
+## ⚙️How It Works
+The library's operation can be summarized as follows:  
 
-1. Se toma el recurso o los recursos a almacenar y los campos que se desean extraer.
-2. Se crea una tabla principal donde se guarda el id, el tipo de recurso y el recurso completo en formato JSONB en las columnas `id`, `resourcetype` y `content` respectivamente.
-3. En una tabla aparte se guardan los otros campos que se decidieron extraer, además del id del recurso, que se usa como clave foránea para refernciar los datos de la tabla que se crea con la tabla principal que almacena todos los recursos. Si el campo del  recurso es un dato primitivo de FHIR, se almacena en una columna de un tipo de dato Postgres que pueda contenerlo, en caso contrario, se almacena en una columna JSONB.
-4. Con los datos almacenados ya es posible realizar consultas básicas con filtros simples, o consultas semi-avanzadas en campos JSONB utilizando las funciones ubicadas en el namespace `querier`.
+1. The resource or resources to be stored and the fields to be extracted are taken.  
+2. A main table is created to store the `id`, the resource type, and the complete resource in JSONB format in the columns `id`, `resourcetype`, and `content`, respectively.  
+3. In a separate table, the other fields that were chosen to be extracted are stored, along with the resource `id`, which is used as a foreign key to reference the data in the table created with the main table that stores all the resources. If the resource field is a primitive FHIR data type, it is stored in a PostgreSQL column of a compatible data type; otherwise, it is stored in a JSONB column.  
+4. With the data stored, it is now possible to perform basic queries with simple filters or semi-advanced queries on JSONB fields using the functions located in the `querier` namespace.  
 
-## 🛠️Operaciones Básicas: Crear/almacenar recursos
+## 🛠️Basic Operations: Create/Store Resources
 
-### Ejemplo de uso para un solo recurso FHIR: `map-resource`
+### Example Usage for a Single FHIR Resource: `map-resource`
 ```clj
 (:require [fhir-pogs.core :refer [parse-resource]]
           [fhir-pogs.mapper :refer [map-resource]])
@@ -39,36 +39,36 @@ El funcionamiento de la librería se resume así:
 
 (map-resource db-spec "fhir_resources" [:defaults] resource)
 ```
-Aquí vemos como se almacena un recurso de tipo `Patient`  a la base de datos especificada en el `db-spec`. Se utiliza la función `map-resource` para mapear este recurso dentro de la base de datos. Esta función acepta los siguientes parámetros en orden:
-- `db-spec`: las especificaciones de la base de datos en la que se almacenará el recurso. Estas especificaciones son usadas por `next.jdbc` para hacer las conexiones y ejecutar las operaciones necesarias.
-- `table-name`: el nombre de la tabla donde se desea mapear el recurso.
-- `mapping-fields`: un vector con el nombre de los campos del recurso que se quieren almacenar. Los nombres se dan en formato de `keyword`. Se debe tener en cuenta que el recurso tiene que tener cada campo que se desee mapear presente dentro de él. Si se quiere añadir un campo a la tabla que no está en el recurso para un uso posterior quizás, dentro del vector se puede escribir un mapa donde la clave es el nombre del campo y el valor es el tipo de dato que guardará ese campo. Algunos ejemplos : `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`.
-- `resource`: el recurso FHIR llevado a un mapa clojure.
+Here, we see how a `Patient`-type resource is stored in the database specified in `db-spec`. The `map-resource` function is used to map this resource into the database. This function accepts the following parameters in order:  
+- `db-spec`: the database specifications where the resource will be stored. These specifications are used by `next.jdbc` to establish connections and execute the necessary operations.  
+- `table-name`: the name of the table where the resource will be mapped.  
+- `mapping-fields`: a vector containing the names of the resource fields to be stored. The names are given as `keywords`. Note that the resource must contain each field to be mapped. If you want to add a field to the table that is not in the resource for later use, you can include a map in the vector where the key is the field name and the value is the data type of that field. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`.  
+- `resource`: the FHIR resource converted into a Clojure map.  
 
-> [!NOTE]
->  *Un detalle interesante es que dentro del vector que contiene los campos almacenar, se puede utilizar el keyword reservado `:defaults`, que indicará que se extraigan los campos `meta` y `text` del recurso.*
+> [!NOTE]  
+> *An interesting detail is that within the vector containing the fields to store, you can use the reserved keyword `:defaults`, which indicates that the `meta` and `text` fields of the resource should be extracted.*  
 
-Veamos las tablas que resultan de este ejemplo:
+The resulting tables from the previous example are as follows:
 
 ---
-Tabla *fhir_resources_main*
+*fhir_resources_main*
 
 |id|resourcetype|content|
 |:-:|:----------:|:-----:|
 |example|Patient|"{"id" : "example"...}"|
 ---
-Tabla *fhir_resources_patient*
+*fhir_resources_patient*
 
 |resource_id|text|
 |:---------:|:--:|
 |example|"{"status" : "generated"...}"|
 ---
-Como el recurso no tenía `:meta` no se extrajo.
+The resource don't have `:meta`, therefore the `meta` column was not created in *fhir_resources_patient*.
 
- Esta función es solamente para almacenar un recurso, por lo que si se van a almacenar varios recursos la indicada es `map-resources`.
 
-### Ejemplo de uso para varios recursos FHIR: `map-resources`
-Supongamos que ya tenemos una colección de recursos llamada `resources`. Para almacenarlos en una base de datos PostgreSQL tenemos que utilizar la función `map-resources` que hemos comentado en el segmento anterior. Veamos un ejemplo de su uso:
+
+### Example Usage for Multiple FHIR Resources: `map-resources` 
+Let's suppose we already have a coll of resources called `resources`. To store them into database, we need to use `map-resources`. Let's look at an example:
 
 ```clj
 (:require [fhir-pogs.mapper :refer [map-resources]])
@@ -86,33 +86,31 @@ Supongamos que ya tenemos una colección de recursos llamada `resources`. Para a
 (map-resources db-spec "fhir_resources" :specialized {:patient [:active :text] :others [:defaults]} resources)
 ;;When we don't have only one type of resource, we use :specialized mapping type
 ```
-Para esta función los argumentos cambian ligeramente:
-- `db-spec`: especificaciones de la base de datos en la que se almacenarán los recursos.
-- `table-name`: el nombre que se tomará como base para crear las tablas necesarias.
-- `mapping-type`: un keyword que especificará el tipo de mapeo que se quiere hacer. Puede ser `:single` cuando todos los recursos son del mismo tipo, o puede ser `:specialized` cuando no todos los recursos son del mismo tipo.
-- `mapping-fields`: en el caso de que el `mapping-type` sea `:single`, este parámetro es un vector, como mismo en `map-resource`, pero si se va a hacer un mapeo especializado, este campo será un mapa de manera tal que cada clave sea el tipo de recurso y cada valor un vector con los campos que se desean extraer de ese recurso, sabiendo que esos campo van en formato keyword dentro del vector. Existen acá dos keywords reservados: 
-  - `:all`: cuando queremos que de todos los recursos se extraigan los mismos campos.Se vería así `{:all [:meta :text]}`.
-  - `:others`: cuando especificamos los campos de ciertos recursos y queremos plantear que campos extraer de cualquier otro recurso diferente de los que ya hemos especificado. Se vería así `{:patient [:active :text] :others [:defaults]}`.
-  - `resources`: es una colección de recursos que se desean almacenar.
+For this function, the arguments change slightly:  
+- `db-spec`: the database specifications where the resources will be stored.  
+- `table-name`: the base name used to create the necessary tables.  
+- `mapping-type`: a keyword specifying the type of mapping to be performed. It can be `:single` when all resources are of the same type, or `:specialized` when the resources are of different types.  
+- `mapping-fields`: if the `mapping-type` is `:single`, this parameter is a vector, similar to `map-resource`. However, if the mapping is specialized, this field will be a map where each key is the resource type and each value is a vector containing the fields to be extracted from that resource, given as keywords within the vector. There are two reserved keywords here:  
+  - `:all`: used when you want the same fields to be extracted from all resources. It looks like this: `{:all [:meta :text]}`.  
+  - `:others`: used when specifying fields for certain resources and you want to define which fields to extract from any other resource not already specified. It looks like this: `{:patient [:active :text] :others [:defaults]}`.  
+- `resources`: a collection of resources to be stored.  
 
-> [!IMPORTANT]
-> *Las tablas resultantes de este ejemplo dependen de los recursos que se tengan, pero de manera general, para el mapeo `:single` se tendrá una tabla principal con columnas `id`, `resourcetype` y `content`, y una tabla secundaria con columnas `resource_id`, `active` y `text`; para el mapeo `specialized` se tiene la misma tabla principal, una tabla secundaria que almacenará recursos tipo `Patient` con columnas `active` y `text`, y se tendrán tantas tablas con campos `meta` y `text` como sean necesarias.*
+> [!IMPORTANT]  
+> *The resulting tables from this example depend on the resources available. Generally, for `:single` mapping, there will be a main table with columns `id`, `resourcetype`, and `content`, and a secondary table with columns `resource_id`, `active`, and `text`. For `:specialized` mapping, the same main table is created, a secondary table storing `Patient`-type resources with columns `active` and `text`, and as many additional tables with `meta` and `text` fields as needed.*  
 
-> [!TIP] 
-> *Por cada tipo diferente de recurso que se tenga, se genera una tabla diferente. Esto se hace con el objetivo de que los recursos de un mismo tipo estén almacenados en una misma tabla.* 
-## 📈Estado: En desarrollo
+> [!TIP]  
+> *A separate table is generated for each different resource type. This ensures that resources of the same type are stored together in the same table.*  
 
-Esta librería está en fase activa de desarrollo. Algunas funciones pueden cambiar y nuevas características están por venir.
+## 📈Status: In Development
+This library is in active development. Some functions may change, and new features are coming soon.  
 
-## ✴️Próximamente
-- [X] Mapear recursos FHIR (JSON/Clojure) a tablas PostgreSQL.
-- [ ] Consultar recursos almacenados con filtros simples.
-  - [ ] Búsqueda por `id`.
-  - [ ] Búsqueda por campos planos.
-  - [ ] Paginación `limit/offset`. 
-- [ ] Soportar consultas semi-avanzadas a campos JSONB.
-  - [ ] Consultas en campos anidados.
-  - [ ] Soporte para operadores JSONB.
-  - [ ] Índices GIN.
-
-
+## ✴️Coming Soon  
+- [X] Map FHIR resources (JSON/Clojure) to PostgreSQL tables.  
+- [ ] Query stored resources with simple filters.  
+  - [ ] Search by `id`.  
+  - [ ] Search by flat fields.  
+  - [ ] Pagination with `limit/offset`.  
+- [ ] Support semi-advanced queries on JSONB fields.  
+  - [ ] Queries on nested fields.  
+  - [ ] Support for JSONB operators.  
+  - [ ] GIN indexes.
