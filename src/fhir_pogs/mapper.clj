@@ -1,9 +1,13 @@
 (ns fhir-pogs.mapper
-  (:require [cheshire.core :refer [generate-string]]
+  (:require [cheshire.core :refer [generate-string parse-string]]
             [honey.sql :as sql]
             [honey.sql.helpers :as help]
-            [next.jdbc :as jdbc])
+            [fhir-pogs.db :refer [jdbc-execute!]])
   (:import [org.postgresql.util PGobject]))
+
+(defn parse-resource "Parse a json resource to a clojure map."
+  [json]
+  (parse-string json true))
 
 (defn to-pg-obj "Create a PGobject with the given type and value."
   [^String type value]
@@ -108,7 +112,7 @@
                      (if (and (> (count fields) 3) (= :id name))
                        (assoc-in result [(keyword (str table "_" restype)) :id] value)
                        result)))
-                 {} fields) 
+                 {} fields)
          (map (fn [[n v]] (-> (help/insert-into n)
                               (help/values [v])
                               (sql/format))))
@@ -119,7 +123,7 @@
    (let [final (apply merge (filter map? f))
          fields (remove map? f)]
      (merge final (reduce (fn [x y]
-                            (if-let [value (if (vector? r) (some (fn [x] (when (contains? x y) (get x y))) r)
+                            (if-let [value (if (or (seq? r) (vector? r)) (some (fn [x] (when (contains? x y) (get x y))) r)
                                                (get r y))]
                               (assoc x y (first (type-of value)))
                               x))
@@ -128,18 +132,12 @@
                                           :meta :text)
                                     fields)))))))
 
-(defn jdbc-execute! "Obtains the datasource corresponding to the `db-spec`, connects to the database, and executes a `jdbc/execute!` within a `with-open` block."
-  [db-spec sentence]
-  (let [my-datasource (jdbc/get-datasource db-spec)]
-    (with-open [connection (jdbc/get-connection my-datasource)]
-      (jdbc/execute! connection sentence))))
-
 (defn map-resource "Maps a FHIR resource into a database.  
-\n- `db-spec`: the database specifications. For example: \n{:dbtype \"postgresql\", \n:dbname \"resources\", \n:host \"localhost\", \n:user \"postgres\", \n:port \"5432\", \n:password \"postgres\"}  
-\n- `table-name`: the name of the table where the resource should be mapped.  
-\n- `mapping-fields`: a vector containing the names of the fields from the resource to be mapped. The names are given in keyword format. Note that the resource must contain every field that is intended to be mapped. If a field is to be added to the table that is not present in the resource—perhaps for future use—it can be written within the vector as a map, where the key is the name of the field and the value is the data type that field will store. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`  
-\n- resource: the FHIR resource converted into a Clojure map.  
-\nExample of usage:\n ```clojure\n (def test-1 (parse-string <json resource> true))
+ \n- `db-spec`: the database specifications. For example: \n{:dbtype \"postgresql\", \n:dbname \"resources\", \n:host \"localhost\", \n:user \"postgres\", \n:port \"5432\", \n:password \"postgres\"}  
+ \n- `table-name`: the name of the table where the resource should be mapped.  
+ \n- `mapping-fields`: a vector containing the names of the fields from the resource to be mapped. The names are given in keyword format. Note that the resource must contain every field that is intended to be mapped. If a field is to be added to the table that is not present in the resource—perhaps for future use—it can be written within the vector as a map, where the key is the name of the field and the value is the data type that field will store. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`  
+ \n- resource: the FHIR resource converted into a Clojure map.  
+ \nExample of usage:\n ```clojure\n (def test-1 (parse-string <json resource> true))
   (def test-2 (parse-string <json resource> true))
   (def test-3 (parse-string <json resource> true))
 
@@ -154,6 +152,7 @@
 
   [db-spec ^String table-name mapping-fields resource]
   (cond
+    (not (and (contains? resource :id) (contains? resource :resourceType))) (throw (IllegalArgumentException. "The resource don't have the obligatory keys :id & :resourceType."))
     (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
     (not (vector? mapping-fields)) (throw (IllegalArgumentException. "The mapping-fields parameter must be a vector."))
     (not (map? resource)) (throw (IllegalArgumentException. "The resource parameter must be a map.")))
@@ -164,18 +163,18 @@
     (map #(jdbc-execute! db-spec %) (insert-to-sentence (template table-name (keys fields) resource) restype))))
 
 (defn map-resources "Works very similarly to map-resource, with the difference that it handles multiple resources instead of just one. The resources can have two types of mapping:  
-\n- `:single`: all resources are of the same type, so they can be inserted into a single table. For this type, the mapping-fields parameter is a vector of fields in keyword format.  
-\n- `:specialized`: resources are of various types, so a separate table is created for each resource type. For this type, mapping-fields is a map where the keys are the resource types and the values are vectors containing the fields in keyword format. There are two reserved keywords: `:all` and `:others`. The first is used when specifying the fields to extract from all resources, and the second when specific resource types and their fields have been defined, and additional fields need to be specified for any other resource types. It is recommended to always include :others, but if omitted and a resource of an unspecified type is encountered, only the basic fields will be mapped in the main or controlling table. By basic fields we mean :id, :resourceType, and :content.  
-\nExample of a function call: \n```clojure \n(map-resources db-spec \"fhir_reources\" :single [:defaults] <resources>) \n(map-resources db-spec \"fhir_resources_database\" :specialized {:all [:text]} <resources>)"
-  
+ \n- `:single`: all resources are of the same type, so they can be inserted into a single table. For this type, the mapping-fields parameter is a vector of fields in keyword format.  
+ \n- `:specialized`: resources are of various types, so a separate table is created for each resource type. For this type, mapping-fields is a map where the keys are the resource types and the values are vectors containing the fields in keyword format. There are two reserved keywords: `:all` and `:others`. The first is used when specifying the fields to extract from all resources, and the second when specific resource types and their fields have been defined, and additional fields need to be specified for any other resource types. It is recommended to always include :others, but if omitted and a resource of an unspecified type is encountered, only the basic fields will be mapped in the main or controlling table. By basic fields we mean :id, :resourceType, and :content.  
+ \nExample of a function call: \n```clojure \n(map-resources db-spec \"fhir_reources\" :single [:defaults] <resources>) \n(map-resources db-spec \"fhir_resources_database\" :specialized {:all [:text]} <resources>)"
+
   [db-spec ^String table-name mapping-type mapping-fields resources]
   (cond
+    (not-every? #(and (contains? % :id) (contains? % :resourceType)) resources) (throw (IllegalArgumentException. "Some resource don't have the obligatory keys :id & :resourceType"))
     (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
     (not (keyword? mapping-type)) (throw (IllegalArgumentException. "The mapping-type parameter must be a keyword."))
     (map? resources) (throw (IllegalArgumentException. "The resources parameter must be a list or a vector."))
-    (not (and (= :single mapping-type) (vector? mapping-fields))) (throw (IllegalArgumentException. "If you want a single mapping, the mapping-fields parameter must be a vector."))
-    (not (and (= :specialized mapping-type) (map? mapping-fields))) (throw (IllegalArgumentException. "If you want a specialized mapping, the mapping-fields parameter must be a map."))
-    )
+    (and (= :single mapping-type) (not (vector? mapping-fields))) (throw (IllegalArgumentException. "If you want a single mapping, the mapping-fields parameter must be a vector."))
+    (and (= :specialized mapping-type) (not (map? mapping-fields))) (throw (IllegalArgumentException. "If you want a specialized mapping, the mapping-fields parameter must be a map.")))
   (cond
     (= :single mapping-type)
     (do (when (not-every? #(= (:resourceType (first resources)) (:resourceType %)) resources)

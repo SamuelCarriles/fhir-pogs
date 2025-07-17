@@ -19,8 +19,7 @@ The library's operation can be summarized as follows:
 
 ### Example Usage for a Single FHIR Resource: `map-resource`
 ```clj
-(:require [fhir-pogs.core :refer [parse-resource]]
-          [fhir-pogs.mapper :refer [map-resource]])
+(:require [fhir-pogs.mapper :refer [parse-resource map-resource]])
 
 (def db-spec {:dbtype "postgresql"
               :dbname "resources"
@@ -101,6 +100,18 @@ For this function, the arguments change slightly:
 > [!TIP]  
 > *A separate table is generated for each different resource type. This ensures that resources of the same type are stored together in the same table.*  
 
+## ⚗️Tests
+To run all tests start the container defined in `docker-compose.yml` first, and after execute the test:
+```bash
+docker compose up -d
+clojure -M:test
+```
+>[!NOTE]
+>*When tests begin, the current tables are created and when the tests finished, database is reset.*
+### Prerequisites
+- Ensure JSON test resources are in `resources/json/`.
+- Requires **Clojure CLI**.
+- **Docker** and **Docker Compose** installed.
 ## 📈Status: In Development
 This library is in active development. Some functions may change, and new features are coming soon.  
 
