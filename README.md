@@ -101,7 +101,7 @@ For this function, the arguments change slightly:
 > *A separate table is generated for each different resource type. This ensures that resources of the same type are stored together in the same table.*  
 
 ## ⚗️Tests
-To run all tests start the container defined in `docker-compose.yml` first, and after execute the test:
+To run all tests, first start the container defined in `docker-compose.yml` and after execute the test:
 ```bash
 docker compose up -d
 clojure -M:test
