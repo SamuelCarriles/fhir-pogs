@@ -1,7 +1,7 @@
 (ns test-runner
   (:require [clojure.test :refer [run-tests]] 
             [fhir-pogs.db :refer [table-remove!]]
-            [fhir-pogs.mapper-test]))
+            [fhir-pogs.mapping-test]))
 
 (def db-spec {:dbtype "postgresql"
               :dbname "resources"

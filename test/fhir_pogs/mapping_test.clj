@@ -1,6 +1,6 @@
-(ns fhir-pogs.mapper-test
+(ns fhir-pogs.mapping-test
   (:require [clojure.test :refer [deftest is testing]] 
-            [fhir-pogs.mapper :refer :all] 
+            [fhir-pogs.mapping :refer :all] 
             [test-tools.core :refer [read-json-files]]))
 
 (deftest test-parse-resource
@@ -37,4 +37,3 @@
 (deftest test-db-resources-mapping
   (testing "Map resources to Postgres db"
     (is (map-resources db-spec "testing" :specialized {:all [:defaults]} (map parse-resource (read-json-files))))))
-

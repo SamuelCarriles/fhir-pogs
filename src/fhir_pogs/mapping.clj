@@ -1,4 +1,4 @@
-(ns fhir-pogs.mapper
+(ns fhir-pogs.mapping
   (:require [cheshire.core :refer [generate-string parse-string]]
             [honey.sql :as sql]
             [honey.sql.helpers :as help]

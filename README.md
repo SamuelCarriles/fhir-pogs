@@ -13,13 +13,13 @@ The library's operation can be summarized as follows:
 1. The resource or resources to be stored and the fields to be extracted are taken.  
 2. A main table is created to store the `id`, the resource type, and the complete resource in JSONB format in the columns `id`, `resourcetype`, and `content`, respectively.  
 3. In a separate table, the other fields that were chosen to be extracted are stored, along with the resource `id`, which is used as a foreign key to reference the data in the table created with the main table that stores all the resources. If the resource field is a primitive FHIR data type, it is stored in a PostgreSQL column of a compatible data type; otherwise, it is stored in a JSONB column.  
-4. With the data stored, it is now possible to perform basic queries with simple filters or semi-advanced queries on JSONB fields using the functions located in the `querier` namespace.  
+4. With the data stored, it is now possible to perform basic queries with simple filters or semi-advanced queries on JSONB fields using the functions located in the `query` namespace.  
 
 ## 🛠️Basic Operations: Create/Store Resources
 
 ### Example Usage for a Single FHIR Resource: `map-resource`
 ```clj
-(:require [fhir-pogs.mapper :refer [parse-resource map-resource]])
+(:require [fhir-pogs.mapping :refer [parse-resource map-resource]])
 
 (def db-spec {:dbtype "postgresql"
               :dbname "resources"
@@ -70,7 +70,7 @@ The resource don't have `:meta`, therefore the `meta` column was not created in 
 Let's suppose we already have a coll of resources called `resources`. To store them into database, we need to use `map-resources`. Let's look at an example:
 
 ```clj
-(:require [fhir-pogs.mapper :refer [map-resources]])
+(:require [fhir-pogs.mapping :refer [map-resources]])
 
 (def db-spec {:dbtype "postgresql"
               :dbname "resources"
