@@ -1,6 +1,10 @@
 (ns fhir-pogs.mapping-test
   (:require [clojure.test :refer [deftest is testing]] 
-            [fhir-pogs.mapping :refer :all] 
+            [fhir-pogs.mapping :refer [parse-resource
+                                       template
+                                       insert-to-sentence
+                                       create-table
+                                       map-resources]] 
             [test-tools.core :refer [read-json-files]]))
 
 (deftest test-parse-resource
