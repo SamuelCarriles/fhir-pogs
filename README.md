@@ -2,6 +2,7 @@
 [![FHIR Compatible](https://img.shields.io/badge/FHIR-Compatible-orange?)](https://fhir.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.5-blue?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![License : MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![AskDeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/SamuelCarriles/fhir-pogs)
 # FHIR POGS - PostgreSQL + FHIR + Clojure
 Clojure library to map FHIR resources to PostgreSQL and interact with them.  
 ## 📑About Library
