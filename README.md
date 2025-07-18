@@ -59,7 +59,7 @@ The resulting tables from the previous example are as follows:
 ---
 *fhir_resources_patient*
 
-|resource_id|text|
+|id|text|
 |:---------:|:--:|
 |example|"{"status" : "generated"...}"|
 ---
