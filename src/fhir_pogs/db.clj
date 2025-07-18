@@ -1,6 +1,5 @@
 (ns fhir-pogs.db
-  (:require [fhir-pogs.db.meta :refer [get-tables]]
-            [next.jdbc :as jdbc]
+  (:require [next.jdbc :as jdbc]
             [honey.sql.helpers :as help]
             [honey.sql :as sql]))
 
@@ -11,6 +10,16 @@
       (jdbc/execute! connection sentence))))
 
 
+(defn get-tables "Retorna una seq de keywords que son las tablas que existen en una base de datos especificada."
+  [db-spec]
+  (->> (map #(:tables/table_name %)
+            (jdbc-execute! db-spec (-> (help/select :table-name)
+                                       (help/from :information-schema.tables)
+                                       (help/where [:= :table-schema "public"]
+                                                   [:= :table-type "BASE TABLE"])
+                                       sql/format)))
+       (map keyword)))
+
 (defn table-remove! "Borra una o varias tablas en una base de datos especificada."
   [db-spec n]
   (if (and (= 1 (count n)) (= :all (first n)))
@@ -20,12 +29,11 @@
                sql/format)]
       (if (seq (get-tables db-spec)) (jdbc-execute! db-spec sentence) nil))
     (when (and (seq (get-tables db-spec))
-               (every? true? 
-                       (reduce (fn [o i] 
+               (every? true?
+                       (reduce (fn [o i]
                                  (if (some #(= % i) n)
-                                   (conj o true) 
-                                   (conj o false))) 
+                                   (conj o true)
+                                   (conj o false)))
                                #{} (get-tables db-spec))))
       (jdbc-execute! db-spec (-> (apply help/drop-table n)
                                  sql/format)))))
-

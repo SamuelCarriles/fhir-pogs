@@ -60,14 +60,14 @@
 (defn create-table "Returns an SQL statement to create a table with the specified fields. If the function is called with a single argument, it will create the main table where general data for each resource will be stored.\n - `table-name`: base name of the table.\n - `restype`: type of resource to be stored.\n - `fields`: a map containing the fields to be extracted and the data type they store.\nExample of usage:\n ```clojure \n(create-table \"fhir_resources\")\n;; => [\"CREATE TABLE IF NOT EXISTS fhir_resources_main (resource_id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL)\"] \n(create-table \"fhir_resources\" \"Patient\" {:meta :jsonb :text :jsonb})\n;; => [\"CREATE TABLE IF NOT EXISTS fhir_resources_Patient (id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL, meta JSONB, text JSONB)\"]"
   ([^String table-name]
    (-> (help/create-table (keyword (str table-name "_main")) :if-not-exists)
-       (help/with-columns [[:resource-id :text :primary-key :not-null]
+       (help/with-columns [[:id :text :primary-key :not-null]
                            [:resourceType :text :not-null]
                            [:content :jsonb :not-null]])
        sql/format))
 
   ([^String table-name ^String restype fields]
    (let [columns (into
-                  [[:id :text :primary-key :not-null [:references (keyword (str table-name "_main")) :resource-id] :on-delete-cascade]]
+                  [[:id :text :primary-key :not-null [:references (keyword (str table-name "_main")) :id] :on-delete-cascade]]
                   fields)]
      (-> (help/create-table (keyword (str table-name "_" restype)) :if-not-exists)
          (help/with-columns columns)
@@ -104,11 +104,8 @@
                                             (= name :resourceType)
                                             (= name :content))
                                       (str table "_main")
-                                      (str table "_" restype)))
-                         n (if (and (= t (keyword (str table "_main")))
-                                    (= name :id))
-                             :resource-id name)
-                         result (assoc-in o [t n] value)]
+                                      (str table "_" restype))) 
+                         result (assoc-in o [t name] value)]
                      (if (and (> (count fields) 3) (= :id name))
                        (assoc-in result [(keyword (str table "_" restype)) :id] value)
                        result)))
@@ -194,3 +191,4 @@
              resources))
     :else
     (throw (IllegalArgumentException. (str "The mapping-type is incorrect. The type " mapping-type " doesn't exist.")))))
+

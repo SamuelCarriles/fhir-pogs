@@ -1,6 +1,6 @@
 (ns fhir-pogs.query
-  (:require [fhir-pogs.db.meta :refer [get-tables get-columns-info]]
-            [fhir-pogs.db :refer [jdbc-execute!]] 
+  (:require [fhir-pogs.db.meta :refer [get-columns-info]]
+            [fhir-pogs.db :refer [jdbc-execute! get-tables]] 
             [honey.sql.helpers :as help]
             [honey.sql :as sql]))
 
