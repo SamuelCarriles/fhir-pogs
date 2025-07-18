@@ -1,9 +1,9 @@
 (ns fhir-pogs.db.meta
-  (:require [fhir-pogs.db :refer [jdbc-execute!]]
+  (:require [fhir-pogs.db.core :refer [jdbc-execute!]]
             [honey.sql.helpers :as help]
             [honey.sql :as sql]))
 
-(defn get-columns-info [db-spec table-name]
+(defn get-columns-info! [db-spec table-name]
   (->> (jdbc-execute! db-spec (-> (help/select :column-name :data-type)
                              (help/from :information-schema.columns)
                              (help/where [:= :table-schema "public"]

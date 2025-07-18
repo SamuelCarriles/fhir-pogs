@@ -18,9 +18,9 @@ The library's operation can be summarized as follows:
 
 ## 🛠️Basic Operations: Create/Store Resources
 
-### Example Usage for a Single FHIR Resource: `map-resource`
+### Example Usage for a Single FHIR Resource: `save-resource!`
 ```clj
-(:require [fhir-pogs.mapping :refer [parse-resource map-resource]])
+(:require [fhir-pogs.mapper :refer [parse-resource save-resource!]])
 
 (def db-spec {:dbtype "postgresql"
               :dbname "resources"
@@ -37,11 +37,11 @@ The library's operation can be summarized as follows:
 ;;  :active true,
 ;;  :deceasedBoolean false}
 
-(map-resource db-spec "fhir_resources" [:defaults] resource)
+(save-resource! db-spec "fhir_resources" [:defaults] resource)
 ```
-Here, we see how a `Patient`-type resource is stored in the database specified in `db-spec`. The `map-resource` function is used to map this resource into the database. This function accepts the following parameters in order:  
+Here, we see how a `Patient`-type resource is stored in the database specified in `db-spec`. The `save-resource!` function maps and saves a FHIR resource to the database. This function accepts the following parameters in order:  
 - `db-spec`: the database specifications where the resource will be stored. These specifications are used by `next.jdbc` to establish connections and execute the necessary operations.  
-- `table-name`: the name of the table where the resource will be mapped.  
+- `table-prefix`: one prefix to the name of the tables where the resource will be mapped.  
 - `mapping-fields`: a vector containing the names of the resource fields to be stored. The names are given as `keywords`. Note that the resource must contain each field to be mapped. If you want to add a field to the table that is not in the resource for later use, you can include a map in the vector where the key is the field name and the value is the data type of that field. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`.  
 - `resource`: the FHIR resource converted into a Clojure map.  
 
@@ -67,11 +67,11 @@ The resource don't have `:meta`, therefore the `meta` column was not created in 
 
 
 
-### Example Usage for Multiple FHIR Resources: `map-resources` 
-Let's suppose we already have a coll of resources called `resources`. To store them into database, we need to use `map-resources`. Let's look at an example:
+### Example Usage for Multiple FHIR Resources: `save-resources!` 
+Let's suppose we already have a coll of resources called `resources`. To store them into database, we need to use `save-resources!`. Let's look at an example:
 
 ```clj
-(:require [fhir-pogs.mapping :refer [map-resources]])
+(:require [fhir-pogs.mapper :refer [save-resources!]])
 
 (def db-spec {:dbtype "postgresql"
               :dbname "resources"
@@ -80,17 +80,17 @@ Let's suppose we already have a coll of resources called `resources`. To store t
               :password "postgres"
               :port "5432"})
 
-(map-resources db-spec "fhir_resources" :single [:active :text] resources)
+(save-resources! db-spec "fhir_resources" :single [:active :text] resources)
 ;;When we have only one type of resource, we use :single mapping type
 
-(map-resources db-spec "fhir_resources" :specialized {:patient [:active :text] :others [:defaults]} resources)
+(save-resources! db-spec "fhir_resources" :specialized {:patient [:active :text] :others [:defaults]} resources)
 ;;When we don't have only one type of resource, we use :specialized mapping type
 ```
 For this function, the arguments change slightly:  
 - `db-spec`: the database specifications where the resources will be stored.  
-- `table-name`: the base name used to create the necessary tables.  
+- `table-prefix`: the table's name prefix used to create the necessary tables.  
 - `mapping-type`: a keyword specifying the type of mapping to be performed. It can be `:single` when all resources are of the same type, or `:specialized` when the resources are of different types.  
-- `mapping-fields`: if the `mapping-type` is `:single`, this parameter is a vector, similar to `map-resource`. However, if the mapping is specialized, this field will be a map where each key is the resource type and each value is a vector containing the fields to be extracted from that resource, given as keywords within the vector. There are two reserved keywords here:  
+- `mapping-fields`: if the `mapping-type` is `:single`, this parameter is a vector, similar to `save-resource!`. However, if the mapping is specialized, this field will be a map where each key is the resource type and each value is a vector containing the fields to be extracted from that resource, given as keywords within the vector. There are two reserved keywords here:  
   - `:all`: used when you want the same fields to be extracted from all resources. It looks like this: `{:all [:meta :text]}`.  
   - `:others`: used when specifying fields for certain resources and you want to define which fields to extract from any other resource not already specified. It looks like this: `{:patient [:active :text] :others [:defaults]}`.  
 - `resources`: a collection of resources to be stored.  
