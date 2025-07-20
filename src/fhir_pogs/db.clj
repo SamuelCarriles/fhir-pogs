@@ -1,4 +1,4 @@
-(ns fhir-pogs.db.core
+(ns fhir-pogs.db
   (:require [next.jdbc :as jdbc]
             [honey.sql.helpers :as help]
             [honey.sql :as sql]))
@@ -18,7 +18,19 @@
                                        (help/where [:= :table-schema "public"]
                                                    [:= :table-type "BASE TABLE"])
                                        sql/format)))
-       (map keyword)))
+       (map keyword)
+       set))
+
+(defn get-columns-of! [db-spec table-name]
+  (->> (jdbc-execute! db-spec (-> (help/select :column-name)
+                                  (help/from :information-schema.columns)
+                                  (help/where [:= :table-schema "public"]
+                                              [:= :table-name (name table-name)])
+                                  (help/order-by :ordinal-position)
+                                  sql/format))
+       (mapcat (fn [col]
+                 (map (fn [[_ v]] (keyword v)) col)))
+       set))
 
 (defn table-remove! "Borra una o varias tablas en una base de datos especificada."
   [db-spec n]

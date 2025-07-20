@@ -53,7 +53,7 @@ The resulting tables from the previous example are as follows:
 ---
 *fhir_resources_main*
 
-|id|resourcetype|content|
+|resource_id|resourcetype|content|
 |:-:|:----------:|:-----:|
 |example|Patient|"{"id" : "example"...}"|
 ---

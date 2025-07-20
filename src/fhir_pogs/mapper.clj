@@ -2,7 +2,7 @@
   (:require [cheshire.core :refer [generate-string parse-string]]
             [honey.sql :as sql]
             [honey.sql.helpers :as help]
-            [fhir-pogs.db.core :refer [jdbc-execute!]])
+            [fhir-pogs.db :refer [jdbc-execute!]])
   (:import [org.postgresql.util PGobject]))
 
 (defn parse-resource "Parse a json resource to a clojure map."
@@ -57,19 +57,19 @@
       (re-matches #"(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?" v)
       [:bytea (to-pg-obj "bytea" v)])))
 
-(defn create-table "Returns an SQL statement to create a table with the specified fields. If the function is called with a single argument, it will create the main table where general data for each resource will be stored.\n - `table-name`: base name of the table.\n - `restype`: type of resource to be stored.\n - `fields`: a map containing the fields to be extracted and the data type they store.\nExample of usage:\n ```clojure \n(create-table \"fhir_resources\")\n;; => [\"CREATE TABLE IF NOT EXISTS fhir_resources_main (resource_id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL)\"] \n(create-table \"fhir_resources\" \"Patient\" {:meta :jsonb :text :jsonb})\n;; => [\"CREATE TABLE IF NOT EXISTS fhir_resources_Patient (id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL, meta JSONB, text JSONB)\"]"
-  ([^String table-name]
-   (-> (help/create-table (keyword (str table-name "_main")) :if-not-exists)
-       (help/with-columns [[:id :text :primary-key :not-null]
+(defn create-table "Returns an SQL statement to create a table with the specified fields. If the function is called with a single argument, it will create the main table where general data for each resource will be stored.\n - `table-prefix`: prefix to the name of the table.\n - `restype`: type of resource to be stored.\n - `fields`: a map containing the fields to be extracted and the data type they store.\nExample of usage:\n ```clojure \n(create-table \"fhir_resources\")\n;; => [\"CREATE TABLE IF NOT EXISTS fhir_resources_main (resource_id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL)\"] \n(create-table \"fhir_resources\" \"Patient\" {:meta :jsonb :text :jsonb})\n;; => [\"CREATE TABLE IF NOT EXISTS fhir_resources_Patient (id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL, meta JSONB, text JSONB)\"]"
+  ([^String table-prefix]
+   (-> (help/create-table (keyword (str table-prefix "_main")) :if-not-exists)
+       (help/with-columns [[:resource-id :text :primary-key :not-null]
                            [:resourceType :text :not-null]
                            [:content :jsonb :not-null]])
        sql/format))
 
-  ([^String table-name ^String restype fields]
+  ([^String table-prefix ^String restype fields]
    (let [columns (into
-                  [[:id :text :primary-key :not-null [:references (keyword (str table-name "_main")) :id] :on-delete-cascade]]
+                  [[:id :text :primary-key :not-null [:references (keyword (str table-prefix "_main")) :resource-id] :on-delete-cascade]]
                   fields)]
-     (-> (help/create-table (keyword (str table-name "_" restype)) :if-not-exists)
+     (-> (help/create-table (keyword (str table-prefix "_" restype)) :if-not-exists)
          (help/with-columns columns)
          sql/format))))
 
@@ -105,7 +105,7 @@
                                             (= name :content))
                                       (str table "_main")
                                       (str table "_" restype))) 
-                         result (assoc-in o [t name] value)]
+                         result (assoc-in o [t (if (= name :id) :resource-id name)] value)]
                      (if (and (> (count fields) 3) (= :id name))
                        (assoc-in result [(keyword (str table "_" restype)) :id] value)
                        result)))
