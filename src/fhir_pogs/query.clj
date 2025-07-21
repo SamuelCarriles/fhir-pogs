@@ -1,5 +1,5 @@
 (ns fhir-pogs.query
-  (:require [fhir-pogs.db :refer [jdbc-execute!]]
+  (:require [fhir-pogs.db :refer [jdbc-execute! get-tables!]]
             [fhir-pogs.mapper :refer [parse-resource]]
             [honey.sql.helpers :as help]
             [honey.sql :as sql]))
@@ -7,25 +7,14 @@
 (defn parse-pg-obj [obj]
   (->> obj .getValue (parse-resource)))
 
-(defn get-resource! "Obtiene el recurso asociado a un id específico en la base de datos
-                     y lo lo devuelve como un mapa."
-  [db-spec ^String table-prefix ^String restype ^String id]
-  (when-not (map? db-spec) (throw (IllegalArgumentException. "db-spec must be a map.")))
-  (let [table (keyword (str table-prefix "_main"))
-        sentence (-> (help/select :content)
-                     (help/from table)
-                     (help/where :and [:= :resource-id id] [:= :resourceType restype])
-                     sql/format)
-        content (first (jdbc-execute! db-spec sentence))]
-    (when content (->> content vals first parse-pg-obj))))
-
-(defn search-resource! "Retorna una seq con los recursos encontrados"
+(defn search-resource! "Retorna una seq con los recursos encontrados."
   [db-spec ^String table-prefix ^String restype conditions]
   (cond
     (not (map? db-spec)) (throw (IllegalArgumentException. "db-spec must be a map."))
-    (not (and (vector? conditions) (every? vector? conditions))) (throw (IllegalArgumentException. "conditions must be a vector of vectors.")))
+    (not (vector? conditions)) (throw (IllegalArgumentException. "conditions must be a vector."))) 
   (let [table (keyword (str table-prefix "_" (.toLowerCase restype)))
         main (keyword (str table-prefix "_main"))]
+    (when-not (contains? (get-tables! db-spec) table) (throw (IllegalArgumentException. (str "The resource type " restype " does not exist into database."))))
     (->>
      (jdbc-execute! db-spec
                     (-> (help/select :content)

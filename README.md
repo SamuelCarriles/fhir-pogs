@@ -112,7 +112,7 @@ clojure -M:test
 ### Prerequisites
 - Ensure JSON test resources are in `resources/json/`.
 - Requires **Clojure CLI**.
-- **Docker** and **Docker Compose** installed.
+- **Docker** and **Docker Compose**.
 ## 📈Status: In Development
 This library is in active development. Some functions may change, and new features are coming soon.  
 
