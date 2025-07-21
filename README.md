@@ -59,9 +59,9 @@ The resulting tables from the previous example are as follows:
 ---
 *fhir_resources_patient*
 
-|id|text|
-|:---------:|:--:|
-|example|"{"status" : "generated"...}"|
+|id|resourcetype|text|
+|:---------:|:--:|:--:|
+|example|Patient|"{"status" : "generated"...}"|
 ---
 The resource don't have `:meta`, therefore the `meta` column was not created in *fhir_resources_patient*.
 
