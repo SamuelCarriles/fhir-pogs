@@ -1,5 +1,5 @@
 (ns fhir-pogs.query
-  (:require [fhir-pogs.db :refer [jdbc-execute! get-columns-of! get-tables! table-remove!]]
+  (:require [fhir-pogs.db :refer [jdbc-execute!]]
             [fhir-pogs.mapper :refer [parse-resource]]
             [honey.sql.helpers :as help]
             [honey.sql :as sql]))
@@ -9,12 +9,12 @@
 
 (defn get-resource! "Obtiene el recurso asociado a un id específico en la base de datos
                      y lo lo devuelve como un mapa."
-  [db-spec ^String table-prefix ^String id]
+  [db-spec ^String table-prefix ^String restype ^String id]
   (when-not (map? db-spec) (throw (IllegalArgumentException. "db-spec must be a map.")))
   (let [table (keyword (str table-prefix "_main"))
         sentence (-> (help/select :content)
                      (help/from table)
-                     (help/where [:= :resource-id id])
+                     (help/where :and [:= :resource-id id] [:= :resourceType restype])
                      sql/format)
         content (first (jdbc-execute! db-spec sentence))]
     (when content (->> content vals first parse-pg-obj))))
@@ -43,13 +43,7 @@
                 :host "localhost"
                 :user "postgres"
                 :port "5432"
-                :password "postgres"})
-
-  (get-resource! db-spec "testing" "exampl")
-
-
+                :password "postgres"}) 
   
-
-
-
-  :.)
+  :.
+  )

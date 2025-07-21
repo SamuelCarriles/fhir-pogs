@@ -41,3 +41,4 @@
 (deftest test-db-resources-mapping
   (testing "Map resources to Postgres db"
     (is (save-resources! db-spec "testing" :specialized {:all [:defaults]} (map parse-resource (read-json-files))))))
+(save-resources! db-spec "testing" :specialized {:all [:defaults]} (map parse-resource (read-json-files)))

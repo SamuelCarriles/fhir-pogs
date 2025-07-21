@@ -60,19 +60,22 @@
 (defn create-table "Returns an SQL statement to create a table with the specified fields. If the function is called with a single argument, it will create the main table where general data for each resource will be stored.\n - `table-prefix`: prefix to the name of the table.\n - `restype`: type of resource to be stored.\n - `fields`: a map containing the fields to be extracted and the data type they store.\nExample of usage:\n ```clojure \n(create-table \"fhir_resources\")\n;; => [\"CREATE TABLE IF NOT EXISTS fhir_resources_main (resource_id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL)\"] \n(create-table \"fhir_resources\" \"Patient\" {:meta :jsonb :text :jsonb})\n;; => [\"CREATE TABLE IF NOT EXISTS fhir_resources_Patient (id TEXT PRIMARY KEY NOT NULL, resourceType TEXT NOT NULL, content JSONB NOT NULL, meta JSONB, text JSONB)\"]"
   ([^String table-prefix]
    (-> (help/create-table (keyword (str table-prefix "_main")) :if-not-exists)
-       (help/with-columns [[:resource-id :text :primary-key :not-null]
-                           [:resourceType :text :not-null]
-                           [:content :jsonb :not-null]])
+       (help/with-columns [[:resource-id :text [:not nil]]
+                           [:resourceType :text [:not nil]]
+                           [:content :jsonb [:not nil]]
+                           [[:primary-key :resource-id :resourceType]]])
        sql/format))
 
   ([^String table-prefix ^String restype fields]
-   (let [columns (into
-                  [[:id :text :primary-key :not-null [:references (keyword (str table-prefix "_main")) :resource-id] :on-delete-cascade]]
-                  fields)]
+   (let [columns (conj
+                  (into [[:id :text [:not nil]]
+                   [:resourceType :text [:not nil] [:default restype]]] fields)
+                  [[:primary-key :id :resourceType]]
+                   [[:foreign-key :id :resourceType] [:references (keyword (str table-prefix "_main")) :resource-id :resourceType] :on-delete-cascade])]
      (-> (help/create-table (keyword (str table-prefix "_" restype)) :if-not-exists)
          (help/with-columns columns)
          sql/format))))
-
+(create-table "fhir" "Patient" {:meta :jsonb})
 (defn template "Creates a map that will serve as a template for inserting into the database the fields to be mapped from the FHIR resource.\n- `table-name`: the name of the table where the fields will be inserted.\n- `fields`: a vector containing the fields to be mapped into the database.\n- `resource`: the FHIR resource converted into a Clojure map."
   [^String table-name fields resource]
   (let [f (set (conj fields :id :resourceType))]
