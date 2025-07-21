@@ -119,8 +119,8 @@ This library is in active development. Some functions may change, and new featur
 ## ✴️Coming Soon  
 - [X] Map FHIR resources (JSON/Clojure) to PostgreSQL tables.  
 - [ ] Query stored resources with simple filters.  
-  - [ ] Search by `id`.  
-  - [ ] Search by flat fields.  
+  - [x] Search by `id`.  
+  - [x] Search by simple conditions.  
   - [ ] Pagination with `limit/offset`.  
 - [ ] Support semi-advanced queries on JSONB fields.  
   - [ ] Queries on nested fields.  
