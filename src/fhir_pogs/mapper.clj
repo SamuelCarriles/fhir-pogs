@@ -9,20 +9,23 @@
   [json]
   (parse-string json true))
 
+(defn parse-jsonb-obj [obj]
+  (->> obj .getValue (parse-resource)))
+
 (defn to-pg-obj "Create a PGobject with the given type and value."
   [^String type value]
   (when (some nil? [type value])
     (throw (IllegalArgumentException. "Some argument it's nil.")))
   (doto (PGobject.)
     (.setType type)
-    (.setValue value)))
+    (.setValue (if (coll? value) (generate-string value) value))))
 
 (defn type-of "Returns a vector containing, as its first element, the keyword associated with the PostgreSQL data type, and as its second element, the value to be stored in the PostgreSQL field."
   [value]
   (when (nil? value) (throw (IllegalArgumentException. "Argument it's nil.")))
   (let [v (.toString value)]
     (cond
-      (coll? value) [:jsonb (to-pg-obj "jsonb" (generate-string v))]
+      (coll? value) [:jsonb (to-pg-obj "jsonb" value)]
 
       (re-matches #"true|false" v)
       [:boolean (Boolean/parseBoolean v)]
@@ -96,7 +99,7 @@
                                     {} resource)))
                    (vec)
                    (conj {:name :content
-                          :value (to-pg-obj "jsonb" (generate-string resource))}))))))
+                          :value (to-pg-obj "jsonb" resource)}))))))
 
 (defn insert-to-sentence "Generates the necessary SQL statements to insert all the data from template into its corresponding table.\n- `template`: a map resulting from applying the `template` function."
   [template ^String restype]
@@ -132,63 +135,3 @@
                                           :meta :text)
                                     fields)))))))
 
-(defn save-resource! "Maps and saves a FHIR resource into a database.  
- \n- `db-spec`: the database specifications. For example: \n{:dbtype \"postgresql\", \n:dbname \"resources\", \n:host \"localhost\", \n:user \"postgres\", \n:port \"5432\", \n:password \"postgres\"}  
- \n- `table-prefix`: the prefix to the name of the tables where the resource should be mapped.  
- \n- `mapping-fields`: a vector containing the names of the fields from the resource to be mapped. The names are given in keyword format. Note that the resource must contain every field that is intended to be mapped. If a field is to be added to the table that is not present in the resource—perhaps for future use—it can be written within the vector as a map, where the key is the name of the field and the value is the data type that field will store. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`  
- \n- resource: the FHIR resource converted into a Clojure map.  
- \nExample of usage:\n ```clojure\n (def test-1 (parse-string <json resource> true))
-
-  (def db-spec {:dbtype \"postgresql\"
-                :dbname \"resources\"
-                :host \"localhost\"
-                :user \"postgres\"
-                :port \"5432\"
-                :password \"postgres\"})
-
-  (save-resource! db-spec \"fhir_resources\" [:defaults :active] test-1)"
-
-  [db-spec ^String table-prefix mapping-fields resource]
-  (cond
-    (not (and (contains? resource :id) (contains? resource :resourceType))) (throw (IllegalArgumentException. "The resource don't have the obligatory keys :id & :resourceType."))
-    (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
-    (not (vector? mapping-fields)) (throw (IllegalArgumentException. "The mapping-fields parameter must be a vector."))
-    (not (map? resource)) (throw (IllegalArgumentException. "The resource parameter must be a map.")))
-  (let [fields (fields-types mapping-fields resource)
-        restype (:resourceType resource)]
-    (jdbc-execute! db-spec (create-table table-prefix))
-    (jdbc-execute! db-spec (create-table  table-prefix restype fields))
-    (map #(jdbc-execute! db-spec %) (insert-to-sentence (template table-prefix (keys fields) resource) restype))))
-
-(defn save-resources! "Works very similarly to `save-resource!`, with the difference that it handles multiple resources instead of just one. The resources can have two types of mapping:  
- \n- `:single`: all resources are of the same type, so they can be inserted into a single table. For this type, the mapping-fields parameter is a vector of fields in keyword format.  
- \n- `:specialized`: resources are of various types, so a separate table is created for each resource type. For this type, mapping-fields is a map where the keys are the resource types and the values are vectors containing the fields in keyword format. There are two reserved keywords: `:all` and `:others`. The first is used when specifying the fields to extract from all resources, and the second when specific resource types and their fields have been defined, and additional fields need to be specified for any other resource types. It is recommended to always include :others, but if omitted and a resource of an unspecified type is encountered, only the basic fields will be mapped in the main or controlling table. By basic fields we mean :id, :resourceType, and :content.  
- \nExample of a function call: \n```clojure \n(save-resources! db-spec \"fhir_reources\" :single [:defaults] <resources>) \n(save-resources! db-spec \"fhir_resources_database\" :specialized {:all [:text]} <resources>)"
-
-  [db-spec ^String table-prefix mapping-type mapping-fields resources]
-  (cond
-    (not-every? #(and (contains? % :id) (contains? % :resourceType)) resources) (throw (IllegalArgumentException. "Some resource don't have the obligatory keys :id & :resourceType"))
-    (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
-    (not (keyword? mapping-type)) (throw (IllegalArgumentException. "The mapping-type parameter must be a keyword."))
-    (map? resources) (throw (IllegalArgumentException. "The resources parameter must be a list or a vector."))
-    (and (= :single mapping-type) (not (vector? mapping-fields))) (throw (IllegalArgumentException. "If you want a single mapping, the mapping-fields parameter must be a vector."))
-    (and (= :specialized mapping-type) (not (map? mapping-fields))) (throw (IllegalArgumentException. "If you want a specialized mapping, the mapping-fields parameter must be a map.")))
-  (cond
-    (= :single mapping-type)
-    (do (when (not-every? #(= (:resourceType (first resources)) (:resourceType %)) resources)
-          (throw (IllegalArgumentException. (str "Not every resources are " (:resourceType (first resources)) ", you should use :specialized mapping type."))))
-        (map #(save-resource! db-spec table-prefix [(fields-types mapping-fields resources)] %) resources))
-    (= :specialized mapping-type)
-    (do (jdbc-execute! db-spec (create-table table-prefix))
-        (map (fn [r]
-               (let [restype (:resourceType r)
-                     restype-key (keyword (.toLowerCase restype))
-                     fields (fields-types (if-let [f (:all mapping-fields)]
-                                            f (if-let [fi (restype-key mapping-fields)]
-                                                fi (if-let [fid (:others mapping-fields)]
-                                                     fid []))) resources)]
-                 (jdbc-execute! db-spec (create-table  table-prefix restype fields))
-                 (map #(jdbc-execute! db-spec %) (insert-to-sentence (template table-prefix (keys fields) r) restype))))
-             resources))
-    :else
-    (throw (IllegalArgumentException. (str "The mapping-type is incorrect. The type " mapping-type " doesn't exist.")))))

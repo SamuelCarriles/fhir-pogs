@@ -5,6 +5,24 @@
 [![AskDeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/SamuelCarriles/fhir-pogs)
 # FHIR POGS - PostgreSQL + FHIR + Clojure
 Clojure library to map FHIR resources to PostgreSQL and interact with them.  
+## 🤔Why this name?
+Why "POGS" instead of just "pg" or "postgres"? What we're eliminating with this library: 
+- **S**uperfluous
+- **T**axing
+- **R**edundant
+- **E**xcess
+
+Therefore: 
+```clojure
+(-> "POSTGRES" 
+      (clojure.string/replace-first #"S" "")
+      (clojure.string/replace-first #"T" "")
+      (clojure.string/replace-first #"R" "")
+      (clojure.string/replace-first #"E" ""))
+;;=> "POGS"
+```
+Just as we remove these letters, FHIR POGS strips away unnecessary complexity when working with FHIR resources in Postgres, leaving only what's essential.
+
 ## 📑About Library
 FHIR POGS is a Clojure library that aims to provide users with the capability to store FHIR resources in a PostgreSQL database and interact with them through **CRUD** operations (**C**reate, **R**ead, **U**pdate, and **D**elete), as well as simple queries on extracted resource fields or advanced queries on JSONB fields.
 

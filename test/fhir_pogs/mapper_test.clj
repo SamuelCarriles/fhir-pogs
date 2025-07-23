@@ -3,8 +3,7 @@
             [fhir-pogs.mapper :refer [parse-resource
                                        template
                                        insert-to-sentence
-                                       create-table
-                                       save-resources!]] 
+                                       create-table]] 
             [test-tools.core :refer [read-json-files]]))
 
 (deftest test-parse-resource
@@ -30,15 +29,5 @@
         (is (and (vector? m) (= 1 (count m)) (string? (first m)) (re-find #"_main" m)))
         (is (and (vector? s) (= 1 (count s)) (string? (first s))))))))
 
-
-(def db-spec {:dbtype "postgresql"
-              :dbname "resources"
-              :host "localhost"
-              :user "postgres"
-              :port "5432"
-              :password "postgres"})
-
-(deftest test-db-resources-mapping
-  (testing "Map resources to Postgres db"
-    (is (save-resources! db-spec "testing" :specialized {:all [:defaults]} (map parse-resource (read-json-files))))))
-(save-resources! db-spec "testing" :specialized {:all [:defaults]} (map parse-resource (read-json-files)))
+(comment
+  )

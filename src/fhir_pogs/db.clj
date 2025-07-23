@@ -9,7 +9,6 @@
     (with-open [connection (jdbc/get-connection my-datasource)]
       (jdbc/execute! connection sentence))))
 
-
 (defn get-tables! "Retorna una seq de keywords que son las tablas que existen en una base de datos especificada."
   [db-spec]
   (->> (map #(:tables/table_name %)
