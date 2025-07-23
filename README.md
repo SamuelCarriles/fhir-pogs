@@ -24,21 +24,21 @@ Therefore:
 Just as we remove these letters, FHIR POGS strips away unnecessary complexity when working with FHIR resources in Postgres, leaving only what's essential.
 
 ## 📑About Library
-FHIR POGS is a Clojure library that aims to provide users with the capability to store FHIR resources in a PostgreSQL database and interact with them through **CRUD** operations (**C**reate, **R**ead, **U**pdate, and **D**elete), as well as simple queries on extracted resource fields or advanced queries on JSONB fields.
-
+FHIR POGS is a Clojure library that aims to provide users with the capability to store FHIR resources in a PostgreSQL database and interact with them through **CRUD** operations (**C**reate, **R**ead, **U**pdate, and **D**elete).
 ## ⚙️How It Works
 The library's operation can be summarized as follows:  
 
 1. The resource or resources to be stored and the fields to be extracted are taken.  
 2. A main table is created to store the `id`, the resource type, and the complete resource in JSONB format in the columns `id`, `resourcetype`, and `content`, respectively.  
 3. In a separate table, the other fields that were chosen to be extracted are stored, along with the resource `id`, which is used as a foreign key to reference the data in the table created with the main table that stores all the resources. If the resource field is a primitive FHIR data type, it is stored in a PostgreSQL column of a compatible data type; otherwise, it is stored in a JSONB column.  
-4. With the data stored, it is now possible to perform basic queries with simple filters or semi-advanced queries on JSONB fields using the functions located in the `query` namespace.  
+4. With the data stored, it is now possible to perform **CRUD** operations located in `fhir-pogs.core`.
 
 ## 🛠️Basic Operations: Create/Store Resources
 
 ### Example Usage for a Single FHIR Resource: `save-resource!`
 ```clj
-(:require [fhir-pogs.mapper :refer [parse-resource save-resource!]])
+(:require [fhir-pogs.mapper :refer [parse-resource]]
+          [fhir-pogs.core :refer [save-resource!]])
 
 (def db-spec {:dbtype "postgresql"
               :dbname "resources"
@@ -89,7 +89,7 @@ The resource don't have `:meta`, therefore the `meta` column was not created in 
 Let's suppose we already have a coll of resources called `resources`. To store them into database, we need to use `save-resources!`. Let's look at an example:
 
 ```clj
-(:require [fhir-pogs.mapper :refer [save-resources!]])
+(:require [fhir-pogs.core :refer [save-resources!]])
 
 (def db-spec {:dbtype "postgresql"
               :dbname "resources"
@@ -136,11 +136,8 @@ This library is in active development. Some functions may change, and new featur
 
 ## ✴️Coming Soon  
 - [X] Map FHIR resources (JSON/Clojure) to PostgreSQL tables.  
-- [ ] Query stored resources with simple filters.  
+- [X] Query stored resources with filters.  
   - [x] Search by `id`.  
-  - [x] Search by simple conditions.  
-  - [ ] Pagination with `limit/offset`.  
+  - [x] Search by simple and advanced conditions.    
 - [ ] Support semi-advanced queries on JSONB fields.  
-  - [ ] Queries on nested fields.  
-  - [ ] Support for JSONB operators.  
-  - [ ] GIN indexes.
+  
