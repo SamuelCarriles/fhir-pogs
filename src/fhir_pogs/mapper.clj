@@ -1,8 +1,7 @@
 (ns fhir-pogs.mapper
   (:require [cheshire.core :refer [generate-string parse-string]]
             [honey.sql :as sql]
-            [honey.sql.helpers :as help]
-            [fhir-pogs.db :refer [jdbc-execute!]])
+            [honey.sql.helpers :as help])
   (:import [org.postgresql.util PGobject]))
 
 (defn parse-resource "Parse a json resource to a clojure map."

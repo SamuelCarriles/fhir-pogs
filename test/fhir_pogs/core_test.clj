@@ -1,6 +1,6 @@
 (ns fhir-pogs.core-test
   (:require [test-tools.core :refer [read-json-files]]
-            [clojure.test :refer [deftest is testing]]
+            [clojure.test :refer [deftest is]]
             [fhir-pogs.core :as crud]
             [fhir-pogs.mapper :as mapper]))
 
