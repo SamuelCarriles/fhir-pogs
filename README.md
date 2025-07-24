@@ -56,12 +56,16 @@ The library's operation can be summarized as follows:
 ;;  :deceasedBoolean false}
 
 (save-resource! db-spec "fhir_resources" [:defaults] resource)
+;;or if you only want essentials:
+(save-resource! db-spec "fhir_resources" resource)
 ```
 Here, we see how a `Patient`-type resource is stored in the database specified in `db-spec`. The `save-resource!` function maps and saves a FHIR resource to the database. This function accepts the following parameters in order:  
 - `db-spec`: the database specifications where the resource will be stored. These specifications are used by `next.jdbc` to establish connections and execute the necessary operations.  
 - `table-prefix`: one prefix to the name of the tables where the resource will be mapped.  
 - `mapping-fields`: a vector containing the names of the resource fields to be stored. The names are given as `keywords`. Note that the resource must contain each field to be mapped. If you want to add a field to the table that is not in the resource for later use, you can include a map in the vector where the key is the field name and the value is the data type of that field. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`.  
 - `resource`: the FHIR resource converted into a Clojure map.  
+
+If you only want to save the essentials fields (id,resourceType), you don't need to give mapping-fields. Also, it just generate the main table.
 
 > [!NOTE]  
 > *An interesting detail is that within the vector containing the fields to store, you can use the reserved keyword `:defaults`, which indicates that the `meta` and `text` fields of the resource should be extracted.*  
