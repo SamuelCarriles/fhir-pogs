@@ -139,10 +139,10 @@ This library is in active development. Some functions may change, and new featur
 - [X] Query stored resources with filters.  
   - [x] Search by `id`.  
   - [x] Search by simple and advanced conditions include JSONB fields related conditions.    
-- [ ] Crear herramientas necesarias en `fhir-pogs.search` para convertir un AST resultante de una consulta de búsqueda FHIR en cláusulas de condiciones que puedan ser usadas por `fhir-pogs.core/search-resources!`.
-  - [ ] Soportar la creación de cláusulas para búsquedas simples.
-  - [ ] Soportar la creación de cláusulas para búsquedas con valores múltiples.
-  - [ ] Soportar la creación de cláusulas para búsquedas con parámetros compuestos.
-  - [ ] Soportar la creación de cláusulas para búsquedas con parámetros encadenados.
-  - [ ] Soportar la creación de cláusulas para búsquedas con encadenamiento reverso.
-- [ ] Definir `fhir-pogs.search/format` para formatear los resultados de búsqueda, teniendo en cuenta los estándares de búsqueda FHIR.
+- [ ] Build the necessary tools in `fhir-pogs.search` to transform an AST tree produced by a FHIR search query into condition clauses usable by `fhir-pogs.core/search-resources!`.
+  - [ ] Support clause generation for simple search parameters.
+  - [ ] Support clause generation for search parameters with multiple values.
+  - [ ] Support clause generation for composite search parameters.
+  - [ ] Support clause generation for chained search parameters.
+  - [ ] Support clause generation for reverse-chained search parameters.
+- [ ] Define `fhir-pogs.search/format` to format search results in compliance with FHIR search standards.
