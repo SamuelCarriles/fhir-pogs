@@ -1,6 +1,7 @@
 (ns fhir-pogs.core
   (:require [fhir-pogs.mapper :as mapper]
             [fhir-pogs.db :as db]
+            [fhir-pogs.validator :as v]
             [next.jdbc :as jdbc]
             [honey.sql.helpers :as help]
             [honey.sql :as sql]))
@@ -26,7 +27,8 @@
     (not (and (contains? resource :id) (contains? resource :resourceType))) (throw (IllegalArgumentException. "The resource don't have the obligatory keys :id & :resourceType."))
     (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
     (not (vector? mapping-fields)) (throw (IllegalArgumentException. "The mapping-fields parameter must be a vector."))
-    (not (map? resource)) (throw (IllegalArgumentException. "The resource parameter must be a map.")))
+    (not (map? resource)) (throw (IllegalArgumentException. "The resource parameter must be a map."))
+    (not (v/valid? resource)) (throw (IllegalArgumentException. "Invalid resource.")))
   (let [fields (mapper/fields-types mapping-fields resource)
         restype (:resourceType resource)]
     (db/jdbc-execute! db-spec (mapper/create-table table-prefix))
@@ -44,6 +46,7 @@
     (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
     (not (keyword? mapping-type)) (throw (IllegalArgumentException. "The mapping-type parameter must be a keyword."))
     (map? resources) (throw (IllegalArgumentException. "The resources parameter must be a list or a vector."))
+    (not-every? v/valid? resources) (throw (IllegalArgumentException. "Some resources are not valid."))
     (and (= :single mapping-type) (not (vector? mapping-fields))) (throw (IllegalArgumentException. "If you want a single mapping, the mapping-fields parameter must be a vector."))
     (and (= :specialized mapping-type) (not (map? mapping-fields))) (throw (IllegalArgumentException. "If you want a specialized mapping, the mapping-fields parameter must be a map.")))
   (cond
@@ -94,6 +97,7 @@
                          sql/format)))))
 
 (defn update-resource! [db-spec ^String table-prefix ^String restype ^String id new-content]
+  (when-not (v/valid? new-content) (throw (IllegalArgumentException. "The resource update are invalid.")))
   (when (seq (search-resources! db-spec table-prefix restype [[:= :resource_id id]]))
     (let [main (keyword (str table-prefix "_main"))
           table (keyword (str table-prefix "_" restype))

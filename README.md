@@ -29,8 +29,8 @@ FHIR POGS is a Clojure library that aims to provide users with the capability to
 The library's operation can be summarized as follows:  
 
 1. The resource or resources to be stored and the fields to be extracted are taken.  
-2. A main table is created to store the `id`, the resource type, and the complete resource in JSONB format in the columns `id`, `resourcetype`, and `content`, respectively.  
-3. In a separate table, the other fields that were chosen to be extracted are stored, along with the resource `id`, which is used as a foreign key to reference the data in the table created with the main table that stores all the resources. If the resource field is a primitive FHIR data type, it is stored in a PostgreSQL column of a compatible data type; otherwise, it is stored in a JSONB column.  
+2. A main table is created to store the `id`, the resource type, and the complete resource in JSONB format in the columns `resource_id`, `resourcetype`, and `content`, respectively.  
+3. In a separate table, the other fields that were chosen to be extracted are stored, along with the resource `id` and `resourcetype`, which are used as a foreign key to reference the data in the table created with the main table that stores all the resources. If the resource field is a primitive FHIR data type, it is stored in a PostgreSQL column of a compatible data type; otherwise, it is stored in a JSONB column.  
 4. With the data stored, it is now possible to perform **CRUD** operations located in `fhir-pogs.core`.
 
 ## 🛠️Basic Operations: Create/Store Resources
@@ -128,7 +128,7 @@ clojure -M:test
 >[!NOTE]
 >*When tests begin, the current tables are created and when the tests finished, database is reset.*
 ### Prerequisites
-- Ensure JSON test resources are in `resources/json/`.
+- Make sure the ZIP json examples file is extracted into `resources/json/`.
 - Requires **Clojure CLI**.
 - **Docker** and **Docker Compose**.
 ## 📈Status: In Development
@@ -138,6 +138,11 @@ This library is in active development. Some functions may change, and new featur
 - [X] Map FHIR resources (JSON/Clojure) to PostgreSQL tables.  
 - [X] Query stored resources with filters.  
   - [x] Search by `id`.  
-  - [x] Search by simple and advanced conditions.    
-- [ ] Support semi-advanced queries on JSONB fields.  
-  
+  - [x] Search by simple and advanced conditions include JSONB fields related conditions.    
+- [ ] Crear herramientas necesarias en `fhir-pogs.search` para convertir un AST resultante de una consulta de búsqueda FHIR en cláusulas de condiciones que puedan ser usadas por `fhir-pogs.core/search-resources!`.
+  - [ ] Soportar la creación de cláusulas para búsquedas simples.
+  - [ ] Soportar la creación de cláusulas para búsquedas con valores múltiples.
+  - [ ] Soportar la creación de cláusulas para búsquedas con parámetros compuestos.
+  - [ ] Soportar la creación de cláusulas para búsquedas con parámetros encadenados.
+  - [ ] Soportar la creación de cláusulas para búsquedas con encadenamiento reverso.
+- [ ] Definir `fhir-pogs.search/format` para formatear los resultados de búsqueda, teniendo en cuenta los estándares de búsqueda FHIR.
