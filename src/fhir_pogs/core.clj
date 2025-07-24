@@ -32,7 +32,7 @@
   (let [fields (mapper/fields-types mapping-fields resource)
         restype (:resourceType resource)]
     (db/jdbc-execute! db-spec (mapper/create-table table-prefix))
-    (db/jdbc-execute! db-spec (mapper/create-table  table-prefix restype fields))
+    (when (some #(get resource %) (keys fields)) (db/jdbc-execute! db-spec (mapper/create-table  table-prefix restype fields)))
     (map #(db/jdbc-execute! db-spec %) (mapper/insert-to-sentence (mapper/template table-prefix (keys fields) resource) restype))))
 
 (defn save-resources! "Works very similarly to `save-resource!`, with the difference that it handles multiple resources instead of just one. The resources can have two types of mapping:  
@@ -63,7 +63,7 @@
                                             f (if-let [fi (restype-key mapping-fields)]
                                                 fi (if-let [fid (:others mapping-fields)]
                                                      fid []))) resources)]
-                 (db/jdbc-execute! db-spec (mapper/create-table  table-prefix restype fields))
+                 (when (some #(get r %) (keys fields)) (db/jdbc-execute! db-spec (mapper/create-table  table-prefix restype fields)))
                  (map #(db/jdbc-execute! db-spec %) (mapper/insert-to-sentence (mapper/template table-prefix (keys fields) r) restype))))
              resources))
     :else
@@ -134,8 +134,6 @@
                                                            :text {:status "generated"}
                                                            :gender "male"})
 
-  (delete-resources! db-spec "testing" "Patient" [[:= :resource_id "example"]])
-
-  
+  (delete-resources! db-spec "testing" "Patient" [[:= :resource_id "example"]]) 
   :.
   )

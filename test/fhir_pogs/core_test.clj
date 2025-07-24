@@ -13,3 +13,4 @@
 
 (deftest testing-save-resources!
   (is (crud/save-resources! db-spec "testing" :specialized {:all [:meta :text]} (map mapper/parse-resource (read-json-files)))))
+
