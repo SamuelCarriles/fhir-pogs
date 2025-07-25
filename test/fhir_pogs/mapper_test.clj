@@ -28,6 +28,3 @@
             s (create-table n t {:meta :jsonb :text :jsonb})]
         (is (and (vector? m) (= 1 (count m)) (string? (first m)) (re-find #"_main" m)))
         (is (and (vector? s) (= 1 (count s)) (string? (first s))))))))
-
-(comment
-  )

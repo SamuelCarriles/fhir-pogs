@@ -107,6 +107,9 @@ Let's suppose we already have a coll of resources called `resources`. To store t
 
 (save-resources! db-spec "fhir_resources" :specialized {:patient [:active :text] :others [:defaults]} resources)
 ;;When we don't have only one type of resource, we use :specialized mapping type
+
+;;if you only want to save essentials fields (id, resourceType and content):
+(save-resources! db-spec "fhir_resources" resources)
 ```
 For this function, the arguments change slightly:  
 - `db-spec`: the database specifications where the resources will be stored.  
