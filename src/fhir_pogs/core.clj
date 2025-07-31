@@ -142,19 +142,3 @@
       (jdbc/with-transaction [tx datasource]
         (mapv #(jdbc/execute-one! tx %) full-sentence)))))
 
-
-
-
-(comment
-  (def db-spec {:dbtype "postgresql"
-                :dbname "resources"
-                :host "localhost"
-                :user "postgres"
-                :port "5432"
-                :password "postgres"})
-  ;; Esta es la forma de buscar en jsonb: [:jsonb_path_exists :content [:cast "$.**.given.**? (@ == \"Isabel\" )" :jsonpath]]
-  (search-resources! db-spec "testing" "Patient" [[:= :resource_id "example"]])
-
-
-
-  :.)

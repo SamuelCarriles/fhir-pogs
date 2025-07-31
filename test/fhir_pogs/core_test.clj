@@ -23,6 +23,3 @@
     (db/table-remove! db-spec [:all])
     (crud/save-resource! db-spec "testing" (rand-nth resources))
     (is (= res-count (count (db/jdbc-execute! db-spec select))))))
-
-
-
