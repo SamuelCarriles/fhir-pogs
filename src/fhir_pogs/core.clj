@@ -87,7 +87,7 @@
   [db-spec ^String table-prefix ^String restype conditions]
   (cond
     (not (map? db-spec)) (throw (IllegalArgumentException. "db-spec must be a map."))
-    (not (and (vector? conditions) (every? vector? conditions))) (throw (IllegalArgumentException. "conditions must be a vector of vectors.")))
+    (not (vector? conditions)) (throw (IllegalArgumentException. "conditions must be a vector.")))
   (let [table (keyword (str table-prefix "_" (.toLowerCase restype)))
         main (keyword (str table-prefix "_main"))
         all-cond (into [:and [:= (keyword "m.resourcetype") restype]] conditions)]
@@ -122,7 +122,7 @@
   (cond
     (or (not (:id new-content)) (not (v/valid? new-content))) (throw (IllegalArgumentException. "The resource update are invalid."))
     (or (not= restype (:resourceType new-content)) (not= id (:id new-content))) (throw (IllegalArgumentException. "The id and resource type of resource update must be equal to the original id and resource type.")))
-  
+
   (when (seq (search-resources! db-spec table-prefix restype [[:= :resource_id id]]))
     (let [main (keyword (str table-prefix "_main"))
           table (keyword (str table-prefix "_" restype))
