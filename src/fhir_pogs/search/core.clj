@@ -143,7 +143,7 @@
              :params [{:value "Jhon"}
                       {:value "Sam"}]}]}
 ;;URI: "Patient?family=Doe,Carriles&given=John,Sam"
-
+  
   (search-fhir! db-spec "testing" "Patient?family=Pereh,Pérez&given=John,Juan")
   :.
   )

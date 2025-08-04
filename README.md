@@ -4,7 +4,7 @@
 [![License : MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![AskDeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/SamuelCarriles/fhir-pogs)
 # FHIR POGS - PostgreSQL + FHIR + Clojure
-Clojure library to map FHIR resources to PostgreSQL and interact with them.  
+Clojure library to map FHIR resources to PostgreSQL and interact with them. This project adheres to the [FHIR](https://www.hl7.org/fhir/) standard for healthcare data exchage. 
 ## 🤔Why this name?
 Why "POGS" instead of just "pg" or "postgres"? What we're eliminating with this library: 
 - **S**uperfluous
@@ -35,8 +35,8 @@ The library's operation can be summarized as follows:
 
 ## 🛠️Basic Operations: Create/Store Resources
 
-### Example Usage for a Single FHIR Resource: `save-resource!`
-```clj
+### Example Usage for a Single FHIR Resource
+```clojure
 (:require [fhir-pogs.mapper :refer [parse-resource]]
           [fhir-pogs.core :refer [save-resource!]])
 
@@ -89,10 +89,10 @@ The resource don't have `:meta`, therefore the `meta` column was not created in 
 
 
 
-### Example Usage for Multiple FHIR Resources: `save-resources!` 
+### Example Usage for Multiple FHIR Resources
 Let's suppose we already have a coll of resources called `resources`. To store them into database, we need to use `save-resources!`. Let's look at an example:
 
-```clj
+```clojure
 (:require [fhir-pogs.core :refer [save-resources!]])
 
 (def db-spec {:dbtype "postgresql"
@@ -125,30 +125,62 @@ For this function, the arguments change slightly:
 
 > [!TIP]  
 > *A separate table is generated for each different resource type. This ensures that resources of the same type are stored together in the same table.*  
+## 🛠️Basic Operations: Read/Search Resources
+Para buscar un recurso o recursos que tengan ciertas características o que cumplan con ciertas condiciones, debemos utilizar la función `search-resources!`. Veamos un ejemplo:
+```clojure
+(:require [fhir-pogs.core :refer [search-resources!]])
 
-## ⚗️Tests
-To run all tests, first start the container defined in `docker-compose.yml` and after execute the test:
-```bash
-docker compose up -d
-clojure -M:test
+(def db-spec {:dbtype "postgresql"
+              :dbname "resources"
+              :host "localhost"
+              :user "postgres"
+              :password "postgres"
+              :port "5432"})
+
+(search-resources! db-spec "fhir_resources" "Patient" [:= :resource_id "pat123"])
+;;=>({:id "pat123", :name [{:given ["Sam"], :family "Altman"}], :resourceType "Patient"})
 ```
->[!NOTE]
->*When tests begin, the current tables are created and when the tests finished, database is reset.*
-### Prerequisites
-- Make sure the ZIP json examples file is extracted into `resources/json/`.
-- Requires **Clojure CLI**.
-- **Docker** and **Docker Compose**.
+La función recibe cuatro parámetros:
+1. `db-spec`: las especificaciones de la db en la que tiene que buscar.
+2. `table-prefix`: el prefijo de las tablas que va a manejar para la búsqueda.
+3. `restype`: el tipo de recurso que va a buscar.
+4. `conditions`: un vector que contiene otros vectores que representan condiciones que debe cumplir un recurso para ser extraído.
+
+>[!IMPORTANT]
+*Las condiciones deben estar en un formato soportado por la librería honeysql. Para más información recomiendo echarle un ojo al README de esa librería, pero como resumen debes saber que una condición no es más que un vector donde el operador (en formato keyword) es el primer elemento y los otros son los que se van a utilizar para ver si se cumple la condición. Por ejemplo, esto sería una de las condiciones que podrían ir dentro del vector `conditions`: [:= :gender "female"]. Esto solo sería posible si tuvieramos una columna `gender` en nuestra tabla, pero es solo un ejemplo para que vean de lo que hablo.*
+
+Las condiciones de busqueda pueden ser tan complejas como se deseen siempre y cuando tengan el formato honeysql correcto.
+
+## 🛠️Basic Operations: Put/Update Resources
+
+## 🛠️Basic Operations: Patch/Modify Resources
+## 🛠️Basic Operations: Delete Resources
+Para eliminar recursos de la base de datos usamos `delete-resources!`.
+```clojure
+(:require [fhir-pogs.core :refer [delete-resources!]])
+
+(def db-spec {:dbtype "postgresql"
+              :dbname "resources"
+              :host "localhost"
+              :user "postgres"
+              :password "postgres"
+              :port "5432"})
+(delete-resources! db-spec "fhir_resources" "Patient" [[:= :resource_id "pat123"]])
+```
+Esta función es igual que la anterior, solamente que en vez de retornar una seq de recursos, retornará una `fully-realized result set` de next.jdbc indicando que la operación fue exitosa.
 ## 📈Status: In Development
 This library is in active development. Some functions may change, and new features are coming soon.  
 
 ## ✴️Coming Soon  
-- [X] Map FHIR resources (JSON/Clojure) to PostgreSQL tables.  
+- [X] Map FHIR resources (JSON/Clojure) to PostgreSQL tables.
 - [X] Query stored resources with filters.  
   - [x] Search by `id`.  
-  - [x] Search by simple and advanced conditions include JSONB fields related conditions.    
+  - [x] Search by simple and advanced conditions include JSONB fields related conditions.
+- [X] Include validation of resources using fhir schema and luposlip/json-schema library.      
 - [ ] Build the necessary tools in `fhir-pogs.search` to transform an AST tree produced by a FHIR search query into condition clauses usable by `fhir-pogs.core/search-resources!`.
-  - [ ] Support clause generation for simple search parameters.
-  - [ ] Support clause generation for search parameters with multiple values.
+  - [X] Support clause generation for compartment.
+  - [X] Support clause generation for simple search parameters.
+  - [X] Support clause generation for search parameters with multiple values.
   - [ ] Support clause generation for composite search parameters.
   - [ ] Support clause generation for chained search parameters.
   - [ ] Support clause generation for reverse-chained search parameters.

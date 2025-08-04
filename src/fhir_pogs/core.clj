@@ -110,6 +110,7 @@
        (mapcat vals)
        (map mapper/parse-jsonb-obj)))))
 
+
 (defn delete-resources! [db-spec ^String table-prefix ^String restype conditions]
   (when (seq (search-resources! db-spec table-prefix restype conditions))
     (let [table (keyword (str table-prefix "_main"))]
@@ -123,7 +124,7 @@
     (or (not (:id new-content)) (not (v/valid? new-content))) (throw (IllegalArgumentException. "The resource update are invalid."))
     (or (not= restype (:resourceType new-content)) (not= id (:id new-content))) (throw (IllegalArgumentException. "The id and resource type of resource update must be equal to the original id and resource type.")))
 
-  (when (seq (search-resources! db-spec table-prefix restype [[:= :resource_id id]]))
+  (when (seq (search-resources! db-spec table-prefix restype [:and [:= :resource_id id] [:= :resourceType restype]]))
     (let [main (keyword (str table-prefix "_main"))
           table (keyword (str table-prefix "_" restype))
           datasource (jdbc/get-datasource db-spec)
@@ -139,6 +140,7 @@
                                     (help/where [:= :id id])
                                     sql/format))
                           base-sentence)]
-      (jdbc/with-transaction [tx datasource]
-        (mapv #(jdbc/execute-one! tx %) full-sentence)))))
+      (when (jdbc/with-transaction [tx datasource]
+              (mapv #(jdbc/execute-one! tx %) full-sentence))
+        (search-resources! db-spec table-prefix restype [:and [:= :resource_id id] [:= :resourceType restype]])))))
 
