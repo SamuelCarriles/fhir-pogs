@@ -5,7 +5,9 @@
             [fhir-pogs.db :as db]
             [fhir-pogs.core :refer [search-resources!]]
             [cheshire.core :refer [parse-string generate-string]]
-            [fhir-search.uri-query :refer [parse]]))
+            [fhir-search.uri-query :refer [parse]]
+            [fhir-search.complex :refer [clean]]
+            [fhir-pogs.core :as crud]))
 
 (def search-params (:entry (parse-string (slurp "resources/search-parameters.json") true)))
 (def compartment-definitions (:entry (parse-string (slurp "resources/compartment-definitions.json") true)))
@@ -63,17 +65,38 @@
         (jsonb-paths-exists path comp))))
 ;;ajustar esto para cuando sea :above, :below, :text-advanced
 
-(defn gen-params-cond [restype join params]
-  (when (and restype join params)
+(defn param-process
+  ([restype param]
+   (let [base (if-let [join (:join param)]
+                [(-> join name keyword)] [])
+         {:keys [name params modifier value]} param 
+         parse-param (fn [n m v] (gen-param-cond (param-path restype n) m v))] 
+     (if params
+       (reduce (fn [o {:keys [modifier value]}]
+                 (conj o (parse-param name modifier value)))
+               base params)
+       (parse-param name modifier value))))
+  ([restype type param]
+   (cond
+     (= :composite type) []
+     (= :chained type) [])))
+
+
+
+(defn gen-params-cond [restype join prms]
+  (when (and restype join prms)
     (let [join (-> join name keyword)
-          conditions (map (fn [{:keys [name params modifier join value] :as param}]
+          conditions (map (fn [{:keys [name params value] :as param}] 
                             (cond
                               (and name value (nil? params))
-                              (gen-param-cond (param-path restype name) modifier value)
+                              (param-process restype param)
                               ;;
-                              (and name params (nil? value)) "Deam bro"
-                              :else nil)) params)]
-      (if (> (count params) 1) (vec (conj conditions :and)) (first conditions)))))
+                              (and name params (nil? value)) (cond
+                                                               (:composite param) (param-process restype :composite param)
+                                                               (:chained param) (param-process restype :chained param)
+                                                               :else (param-process restype param))
+                              :else nil)) prms)]
+      (if (> (count prms) 1) (vec (conj conditions join)) (first conditions)))))
 
 
 
@@ -87,7 +110,8 @@
                           (compartment-paths type compartment)
                           (str " ? (@ == \"" (:type compartment) "/" (:id compartment) "\")"))
         params-cond (gen-params-cond type join params)]
-    (conj [[:= :resourceType type]] (when id [:= :resource-id id]) compartment-cond params-cond)))
+    (-> (conj [[:= :resourceType type]] (when id [:= :resource-id id]) compartment-cond params-cond)
+        clean)))
 
 (defn search-fhir! [db-spec table-prefix uri]
   (let [ast (parse uri)
@@ -96,23 +120,32 @@
 
 (comment
   ;; Esta es la forma de buscar en jsonb: [:jsonb_path_exists :content [:cast "$.**.given.**? (@ == \"Isabel\" )" :jsonpath]]
-
+  
   ;;Tenemos que saber que las clausulas condicionales van a tener este formato:
   ;; [:operador :campo :valor]
-
+  
   (def db-spec {:dbtype "postgresql"
                 :dbname "resources"
                 :host "localhost"
                 :user "postgres"
                 :port "5432"
                 :password "postgres"})
+  
+  
+  {:type "Patient"
+   :join :fhir.search.join/and
+   :params [{:name "family"
+             :join :fhir.search.join/or
+             :params [{:value "Doe"}
+                      {:value "Carriles"}]}
+            {:name "given"
+             :join :fhir.search.join/or
+             :params [{:value "Jhon"}
+                      {:value "Sam"}]}]}
+;;URI: "Patient?family=Doe,Carriles&given=John,Sam"
 
-  (search-fhir! db-spec "testing" "/Patient/example/ClinicalAssessment?finding-code:below=850.00")
-  (search-fhir! db-spec "testing" "/Patient?given=Juan&family=Pérez")
-  (search-fhir! db-spec "testing" "/Questionnaire?publisher:text=FHIR%20Infrastructure")
-
-
-
-  :.)
+  (search-fhir! db-spec "testing" "Patient?family=Pereh,Pérez&given=John,Juan")
+  :.
+  )
 
 
