@@ -142,9 +142,10 @@
              :join :fhir.search.join/or
              :params [{:value "Jhon"}
                       {:value "Sam"}]}]}
-;;URI: "Patient?family=Doe,Carriles&given=John,Sam"
+  ;;URI: "Patient?family=Doe,Carriles&given=John,Sam"
   
   (search-fhir! db-spec "testing" "Patient?family=Pereh,Pérez&given=John,Juan")
+  
   :.
   )
 

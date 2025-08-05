@@ -2,7 +2,6 @@
   (:require [fhir-pogs.mapper :as mapper]
             [fhir-pogs.db :as db]
             [fhir-pogs.validator :as v]
-            [next.jdbc :as jdbc]
             [honey.sql.helpers :as help]
             [honey.sql :as sql]))
 
@@ -29,9 +28,10 @@
      (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
      (not (map? resource)) (throw (IllegalArgumentException. "The resource parameter must be a map."))
      (not (v/valid? resource)) (throw (IllegalArgumentException. "Invalid resource.")))
-   (let [restype (:resourceType resource)]
-     (db/jdbc-execute! db-spec (mapper/create-table table-prefix))
-     (map #(db/jdbc-execute! db-spec %) (mapper/insert-to-sentence (mapper/template table-prefix [] resource) restype))))
+   (let [restype (:resourceType resource)
+         base [(mapper/create-table table-prefix)]
+         sentence (into base (mapper/insert-to-sentence (mapper/template table-prefix [] resource) restype))]
+     (mapper/return-value-process (db/jdbc-transaction! db-spec sentence))))
   ([db-spec ^String table-prefix mapping-fields resource]
    (cond
      (not (and (contains? resource :id) (contains? resource :resourceType))) (throw (IllegalArgumentException. "The resource don't have the obligatory keys :id & :resourceType."))
@@ -40,10 +40,13 @@
      (not (map? resource)) (throw (IllegalArgumentException. "The resource parameter must be a map."))
      (not (v/valid? resource)) (throw (IllegalArgumentException. "Invalid resource.")))
    (let [fields (mapper/fields-types mapping-fields resource)
-         restype (:resourceType resource)]
-     (db/jdbc-execute! db-spec (mapper/create-table table-prefix))
-     (when (some #(get resource %) (keys fields)) (db/jdbc-execute! db-spec (mapper/create-table  table-prefix restype fields)))
-     (map #(db/jdbc-execute! db-spec %) (mapper/insert-to-sentence (mapper/template table-prefix (keys fields) resource) restype)))))
+         restype (:resourceType resource)
+         base [(mapper/create-table table-prefix)]
+         sentence (if (some #(get resource %) (keys fields)) (conj base (mapper/create-table  table-prefix restype fields)) base)]
+     (->> (mapper/insert-to-sentence (mapper/template table-prefix (keys fields) resource) restype)
+          (into sentence)
+          (db/jdbc-transaction! db-spec)
+          mapper/return-value-process))))
 
 (defn save-resources! "Works very similarly to `save-resource!`, with the difference that it handles multiple resources instead of just one. The resources can have two types of mapping:  
  \n- `:single`: all resources are of the same type, so they can be inserted into a single table. For this type, the mapping-fields parameter is a vector of fields in keyword format.  
@@ -54,7 +57,13 @@
      (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
      (map? resources) (throw (IllegalArgumentException. "The resources parameter must be a list or a vector."))
      (not-every? v/valid? resources) (throw (IllegalArgumentException. "Some resources are not valid.")))
-   (map #(save-resource! db-spec table-prefix %) resources))
+   (->> (reduce (fn [o r]
+                  (let [restype (:resourceType r)]
+                    (into o (mapper/insert-to-sentence (mapper/template table-prefix [] r) restype))))
+                [] resources)
+        (into [(mapper/create-table table-prefix)])
+        (db/jdbc-transaction! db-spec)
+        mapper/return-value-process))
   ([db-spec ^String table-prefix mapping-type mapping-fields resources]
    (cond
      (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
@@ -67,19 +76,32 @@
      (= :single mapping-type)
      (do (when (not-every? #(= (:resourceType (first resources)) (:resourceType %)) resources)
            (throw (IllegalArgumentException. (str "Not every resources are " (:resourceType (first resources)) ", you should use :specialized mapping type."))))
-         (map #(save-resource! db-spec table-prefix [(mapper/fields-types mapping-fields resources)] %) resources))
+         (->> (reduce (fn [o r]
+                        (let [restype (:resourceType r)
+                              fields (mapper/fields-types mapping-fields resources)
+                              base (if (some #(get r %) (keys fields)) [(mapper/create-table  table-prefix restype fields)] [])
+                              sentences (into base (mapper/insert-to-sentence (mapper/template table-prefix (keys fields) r) restype))]
+                          (into o sentences)))
+                      [] resources)
+              (into [(mapper/create-table table-prefix)])
+              (db/jdbc-transaction! db-spec)
+              mapper/return-value-process))
      (= :specialized mapping-type)
-     (do (db/jdbc-execute! db-spec (mapper/create-table table-prefix))
-         (map (fn [r]
-                (let [restype (:resourceType r)
-                      restype-key (keyword (.toLowerCase restype))
-                      fields (mapper/fields-types (if-let [f (:all mapping-fields)]
-                                                    f (if-let [fi (restype-key mapping-fields)]
-                                                        fi (if-let [fid (:others mapping-fields)]
-                                                             fid []))) resources)]
-                  (when (some #(get r %) (keys fields)) (db/jdbc-execute! db-spec (mapper/create-table  table-prefix restype fields)))
-                  (map #(db/jdbc-execute! db-spec %) (mapper/insert-to-sentence (mapper/template table-prefix (keys fields) r) restype))))
-              resources))
+     (->> (reduce (fn [o r]
+                    (let [restype (:resourceType r)
+                          restype-key (keyword (.toLowerCase restype))
+                          fields (mapper/fields-types (if-let [f (:all mapping-fields)]
+                                                        f (if-let [fi (restype-key mapping-fields)]
+                                                            fi (if-let [fid (:others mapping-fields)]
+                                                                 fid []))) resources)
+                          base (if (some #(get r %) (keys fields)) [(mapper/create-table  table-prefix restype fields)] [])
+                          sentences (into base (mapper/insert-to-sentence (mapper/template table-prefix (keys fields) r) restype))]
+                      (into o sentences)))
+                  []
+                  resources)
+          (into [(mapper/create-table table-prefix)])
+          (db/jdbc-transaction! db-spec)
+          mapper/return-value-process)
      :else
      (throw (IllegalArgumentException. (str "The mapping-type is incorrect. The type " mapping-type " doesn't exist."))))))
 
@@ -110,28 +132,28 @@
        (mapcat vals)
        (map mapper/parse-jsonb-obj)))))
 
-
 (defn delete-resources! [db-spec ^String table-prefix ^String restype conditions]
   (when (seq (search-resources! db-spec table-prefix restype conditions))
-    (let [table (keyword (str table-prefix "_main"))]
-      (db/jdbc-execute! db-spec
-                        (-> (help/delete-from table)
-                            (help/where conditions)
-                            sql/format)))))
+    (let [table (keyword (str table-prefix "_main"))
+          sentence (-> (help/delete-from table)
+                       (help/where conditions)
+                       sql/format)]
+      (db/jdbc-execute! db-spec sentence))))
 
 (defn update-resource! [db-spec ^String table-prefix ^String restype ^String id new-content]
   (cond
     (or (not (:id new-content)) (not (v/valid? new-content))) (throw (IllegalArgumentException. "The resource update are invalid."))
     (or (not= restype (:resourceType new-content)) (not= id (:id new-content))) (throw (IllegalArgumentException. "The id and resource type of resource update must be equal to the original id and resource type.")))
 
-  (when (seq (search-resources! db-spec table-prefix restype [:and [:= :resource_id id] [:= :resourceType restype]]))
+  (when (seq (search-resources! db-spec table-prefix restype [[:= :resource_id id] [:= :resourceType restype]]))
     (let [main (keyword (str table-prefix "_main"))
-          table (keyword (str table-prefix "_" restype))
-          datasource (jdbc/get-datasource db-spec)
-          columns (remove #{:resourcetype :id} (db/get-columns-of! db-spec (.toLowerCase (name table))))
+          table (keyword (str table-prefix "_" (.toLowerCase restype)))
+          columns (remove #{:resourcetype :id} (db/get-columns-of! db-spec (name table)))
           base-sentence [(-> (help/update main)
                              (help/set {:content (mapper/to-pg-obj "jsonb" new-content)})
-                             (help/where [:= :resource_id id]) sql/format)]
+                             (help/where [:= :resource_id id])
+                             (help/returning :content)
+                             sql/format)]
           full-sentence (if (seq columns)
                           (conj base-sentence
                                 (-> (help/update table)
@@ -140,7 +162,5 @@
                                     (help/where [:= :id id])
                                     sql/format))
                           base-sentence)]
-      (when (jdbc/with-transaction [tx datasource]
-              (mapv #(jdbc/execute-one! tx %) full-sentence))
-        (search-resources! db-spec table-prefix restype [:and [:= :resource_id id] [:= :resourceType restype]])))))
+      (mapper/return-value-process (db/jdbc-transaction! db-spec full-sentence)))))
 

@@ -71,9 +71,9 @@
   ([^String table-prefix ^String restype fields]
    (let [columns (conj
                   (into [[:id :text [:not nil]]
-                   [:resourceType :text [:not nil] [:default restype]]] fields)
+                         [:resourceType :text [:not nil] [:default restype]]] fields)
                   [[:primary-key :id :resourceType]]
-                   [[:foreign-key :id :resourceType] [:references (keyword (str table-prefix "_main")) :resource-id :resourceType] :on-delete-cascade])]
+                  [[:foreign-key :id :resourceType] [:references (keyword (str table-prefix "_main")) :resource-id :resourceType] :on-delete-cascade])]
      (-> (help/create-table (keyword (str table-prefix "_" restype)) :if-not-exists)
          (help/with-columns columns)
          sql/format))))
@@ -109,15 +109,20 @@
                                             (= name :resourceType)
                                             (= name :content))
                                       (str table "_main")
-                                      (str table "_" restype))) 
+                                      (str table "_" restype)))
                          result (assoc-in o [t (if (= name :id) :resource-id name)] value)]
                      (if (and (> (count fields) 3) (= :id name))
                        (assoc-in result [(keyword (str table "_" restype)) :id] value)
                        result)))
                  {} fields)
-         (map (fn [[n v]] (-> (help/insert-into n)
-                              (help/values [v])
-                              (sql/format))))
+         (map (fn [[n v]]
+                (let [sentence (-> (help/insert-into n)
+                                   (help/values [v]))]
+                  (if (= (str table "_main") (name n))
+                    (-> sentence
+                        (help/returning :content)
+                        sql/format)
+                    (-> sentence sql/format)))))
          (sort-by (fn [x] (not (re-find #"_main" (first x))))))))
 
 (defn fields-types "Returns a map where each key is a field and its associated value is the data type of that field.\n- `f`: a vector with the fields whose data types are to be determined. Within this vector, there may be maps for fields that do not appear in the resource but still need to be created in the table, where each key is a field and the value is the data type. Both key and value are keywords.\n- `r`: the FHIR resource converted into a Clojure map."
@@ -134,3 +139,11 @@
                                           :meta :text)
                                     fields)))))))
 
+(defn return-value-process [value]
+  (let [value (->> (flatten value)
+                   (remove (fn [m] (some #(= "next.jdbc" (namespace %)) (keys m)))))
+        ready-value (reduce #(->>
+                              (map (fn [[_ v]] v) %2)
+                              (into %1))
+                            [] value)]
+    (mapv parse-jsonb-obj ready-value)))
