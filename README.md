@@ -58,12 +58,14 @@ The library's operation can be summarized as follows:
 (save-resource! db-spec "fhir_resources" [:defaults] resource)
 ;;or if you only want essentials:
 (save-resource! db-spec "fhir_resources" resource)
+;;=>[{:id "example",
+;;    :resourceType "Patient", ...}]
 ```
 Here, we see how a `Patient`-type resource is stored in the database specified in `db-spec`. The `save-resource!` function maps and saves a FHIR resource to the database. This function accepts the following parameters in order:  
-- `db-spec`: the database specifications where the resource will be stored. These specifications are used by `next.jdbc` to establish connections and execute the necessary operations.  
-- `table-prefix`: one prefix to the name of the tables where the resource will be mapped.  
-- `mapping-fields`: a vector containing the names of the resource fields to be stored. The names are given as `keywords`. Note that the resource must contain each field to be mapped. If you want to add a field to the table that is not in the resource for later use, you can include a map in the vector where the key is the field name and the value is the data type of that field. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`.  
-- `resource`: the FHIR resource converted into a Clojure map.  
+1. `db-spec`: the database specifications where the resource will be stored. These specifications are used by `next.jdbc` to establish connections and execute the necessary operations.  
+2. `table-prefix`: one prefix to the name of the tables where the resource will be mapped.  
+3. `mapping-fields`: a vector containing the names of the resource fields to be stored. The names are given as `keywords`. Note that the resource must contain each field to be mapped. If you want to add a field to the table that is not in the resource for later use, you can include a map in the vector where the key is the field name and the value is the data type of that field. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`.  
+4. `resource`: the FHIR resource converted into a Clojure map.  
 
 If you only want to save the essentials fields (id,resourceType), you don't need to give mapping-fields. Also, it just generate the main table.
 
@@ -112,21 +114,22 @@ Let's suppose we already have a coll of resources called `resources`. To store t
 (save-resources! db-spec "fhir_resources" resources)
 ```
 For this function, the arguments change slightly:  
-- `db-spec`: the database specifications where the resources will be stored.  
-- `table-prefix`: the table's name prefix used to create the necessary tables.  
-- `mapping-type`: a keyword specifying the type of mapping to be performed. It can be `:single` when all resources are of the same type, or `:specialized` when the resources are of different types.  
-- `mapping-fields`: if the `mapping-type` is `:single`, this parameter is a vector, similar to `save-resource!`. However, if the mapping is specialized, this field will be a map where each key is the resource type and each value is a vector containing the fields to be extracted from that resource, given as keywords within the vector. There are two reserved keywords here:  
+1. `db-spec`: the database specifications where the resources will be stored.  
+2. `table-prefix`: the table's name prefix used to create the necessary tables.  
+3. `mapping-type`: a keyword specifying the type of mapping to be performed. It can be `:single` when all resources are of the same type, or `:specialized` when the resources are of different types.  
+4. `mapping-fields`: if the `mapping-type` is `:single`, this parameter is a vector, similar to `save-resource!`. However, if the mapping is specialized, this field will be a map where each key is the resource type and each value is a vector containing the fields to be extracted from that resource, given as keywords within the vector. There are two reserved keywords here:  
   - `:all`: used when you want the same fields to be extracted from all resources. It looks like this: `{:all [:meta :text]}`.  
   - `:others`: used when specifying fields for certain resources and you want to define which fields to extract from any other resource not already specified. It looks like this: `{:patient [:active :text] :others [:defaults]}`.  
-- `resources`: a collection of resources to be stored.  
+5. `resources`: a collection of resources to be stored.  
 
 > [!IMPORTANT]  
 > *The resulting tables from this example depend on the resources available. Generally, for `:single` mapping, there will be a main table with columns `id`, `resourcetype`, and `content`, and a secondary table with columns `resource_id`, `active`, and `text`. For `:specialized` mapping, the same main table is created, a secondary table storing `Patient`-type resources with columns `active` and `text`, and as many additional tables with `meta` and `text` fields as needed.*  
 
 > [!TIP]  
-> *A separate table is generated for each different resource type. This ensures that resources of the same type are stored together in the same table.*  
+> *A separate table is generated for each different resource type. This ensures that resources of the same type are stored together in the same table.* 
+
 ## 🛠️Basic Operations: Read/Search Resources
-Para buscar un recurso o recursos que tengan ciertas características o que cumplan con ciertas condiciones, debemos utilizar la función `search-resources!`. Veamos un ejemplo:
+To look up a resource —or a bunch of them— that match certain criteria, you’ll want to use the `search-resources!` function. Here's a quick example:
 ```clojure
 (:require [fhir-pogs.core :refer [search-resources!]])
 
@@ -140,22 +143,43 @@ Para buscar un recurso o recursos que tengan ciertas características o que cump
 (search-resources! db-spec "fhir_resources" "Patient" [:= :resource_id "pat123"])
 ;;=>({:id "pat123", :name [{:given ["Sam"], :family "Altman"}], :resourceType "Patient"})
 ```
-La función recibe cuatro parámetros:
-1. `db-spec`: las especificaciones de la db en la que tiene que buscar.
-2. `table-prefix`: el prefijo de las tablas que va a manejar para la búsqueda.
-3. `restype`: el tipo de recurso que va a buscar.
-4. `conditions`: un vector que contiene otros vectores que representan condiciones que debe cumplir un recurso para ser extraído.
+This function takes four arguments:
+1. `db-spec`: the database config where the search will happen.
+2. `table-prefix`: the prefix used for the tables you're working with.
+3. `restype`: the type of resource you're looking for.
+4. `conditions`: a vector of vectors, each one representing a condition that the resource has to meet to be returned.
 
 >[!IMPORTANT]
-*Las condiciones deben estar en un formato soportado por la librería honeysql. Para más información recomiendo echarle un ojo al README de esa librería, pero como resumen debes saber que una condición no es más que un vector donde el operador (en formato keyword) es el primer elemento y los otros son los que se van a utilizar para ver si se cumple la condición. Por ejemplo, esto sería una de las condiciones que podrían ir dentro del vector `conditions`: [:= :gender "female"]. Esto solo sería posible si tuvieramos una columna `gender` en nuestra tabla, pero es solo un ejemplo para que vean de lo que hablo.*
+*Conditions need to follow the format supported by the honeysql library. If you want the full scoop, check out the README for honeysql. But in short, a condition is just a vector where the first item is a keyword operator, and the rest are the values used to evaluate the condition. For example, a valid condition could be `[:= :gender "female"]`. That would only work if your table has a gender column, but you get the idea.*
 
-Las condiciones de busqueda pueden ser tan complejas como se deseen siempre y cuando tengan el formato honeysql correcto.
+You can make your search conditions as complex as you want —just stick to the honeysql format.
 
 ## 🛠️Basic Operations: Put/Update Resources
+To update a resource, use `update-resource!`:
+```clojure
+(:require [fhir-pogs.core :refer [update-resource!]])
 
-## 🛠️Basic Operations: Patch/Modify Resources
+(def db-spec {:dbtype "postgresql"
+              :dbname "resources"
+              :host "localhost"
+              :user "postgres"
+              :password "postgres"
+              :port "5432"})
+
+(update-resource! db-spec "fhir_resources" "Patient" "pat123" {:id "pat123"
+                                                               :resourceType "Patient"})
+                                                               :name [{:given ["Sam"]
+                                                                       :family "Altman"}]
+```
+Here’s what you need to pass in:
+1. `db-spec`: your database config.
+2. `table-prefix`: the table prefix you're working with.
+3. `restype`: the type of resource you're updating.
+4. `id`: the ID of the resource you want to update.
+5. `new-content`: the full resource with the updated fields.
+
 ## 🛠️Basic Operations: Delete Resources
-Para eliminar recursos de la base de datos usamos `delete-resources!`.
+To delete resources from the database, use `delete-resources!`:
 ```clojure
 (:require [fhir-pogs.core :refer [delete-resources!]])
 
@@ -167,16 +191,16 @@ Para eliminar recursos de la base de datos usamos `delete-resources!`.
               :port "5432"})
 (delete-resources! db-spec "fhir_resources" "Patient" [[:= :resource_id "pat123"]])
 ```
-Esta función es igual que la anterior, solamente que en vez de retornar una seq de recursos, retornará una `fully-realized result set` de next.jdbc indicando que la operación fue exitosa.
+This function works just like `search-resources!`, except instead of returning a sequence of resources, it gives you a `fully-realized` result set from `next.jdbc` to confirm the operation went through.
 ## 📈Status: In Development
 This library is in active development. Some functions may change, and new features are coming soon.  
 
 ## ✴️Coming Soon  
 - [X] Map FHIR resources (JSON/Clojure) to PostgreSQL tables.
-- [X] Query stored resources with filters.  
-  - [x] Search by `id`.  
+- [X] Query stored resources with filters.   
   - [x] Search by simple and advanced conditions include JSONB fields related conditions.
-- [X] Include validation of resources using fhir schema and luposlip/json-schema library.      
+- [X] Include validation of resources using fhir schema and luposlip/json-schema library. 
+- [X] Create **CRUD** functions.     
 - [ ] Build the necessary tools in `fhir-pogs.search` to transform an AST tree produced by a FHIR search query into condition clauses usable by `fhir-pogs.core/search-resources!`.
   - [X] Support clause generation for compartment.
   - [X] Support clause generation for simple search parameters.

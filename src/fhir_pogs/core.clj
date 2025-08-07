@@ -133,6 +133,9 @@
        (map mapper/parse-jsonb-obj)))))
 
 (defn delete-resources! [db-spec ^String table-prefix ^String restype conditions]
+  (cond
+    (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
+    (not (vector? conditions)) (throw (IllegalArgumentException. "conditions must be a vector.")))
   (when (seq (search-resources! db-spec table-prefix restype conditions))
     (let [table (keyword (str table-prefix "_main"))
           sentence (-> (help/delete-from table)
@@ -142,9 +145,9 @@
 
 (defn update-resource! [db-spec ^String table-prefix ^String restype ^String id new-content]
   (cond
+    (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
     (or (not (:id new-content)) (not (v/valid? new-content))) (throw (IllegalArgumentException. "The resource update are invalid."))
     (or (not= restype (:resourceType new-content)) (not= id (:id new-content))) (throw (IllegalArgumentException. "The id and resource type of resource update must be equal to the original id and resource type.")))
-
   (when (seq (search-resources! db-spec table-prefix restype [[:= :resource_id id] [:= :resourceType restype]]))
     (let [main (keyword (str table-prefix "_main"))
           table (keyword (str table-prefix "_" (.toLowerCase restype)))
