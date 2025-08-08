@@ -72,13 +72,23 @@
          {:keys [name params modifier value]} param 
          parse-param (fn [n m v] (gen-param-cond (param-path restype n) m v))] 
      (if params
-       (reduce (fn [o {:keys [modifier value]}]
-                 (conj o (parse-param name modifier value)))
+       (reduce (fn [o {:keys [modifier value] :as full-param}] 
+                   (conj o (parse-param n modifier value)))
                base params)
        (parse-param name modifier value))))
   ([restype type param]
    (cond
-     (= :composite type) []
+     (= :composite type) 
+     (let [base (if-let [join (:join param)]
+                  [(-> join name keyword)] [])
+           {:keys [name params modifier value]} param
+           parse-param (fn [n m v] (gen-param-cond (param-path restype n) m v))]
+       (if params
+         (reduce (fn [o {:keys [modifier value] :as full-param}]
+                   (conj o (parse-param n modifier value)))
+                 base params)
+         (parse-param name modifier value)))
+     ;;
      (= :chained type) [])))
 
 
@@ -91,7 +101,7 @@
                               (and name value (nil? params))
                               (param-process restype param)
                               ;;
-                              (and name params (nil? value)) (cond
+                              (and name params (nil? value)) (cond 
                                                                (:composite param) (param-process restype :composite param)
                                                                (:chained param) (param-process restype :chained param)
                                                                :else (param-process restype param))
@@ -145,6 +155,11 @@
   ;;URI: "Patient?family=Doe,Carriles&given=John,Sam"
   
   (search-fhir! db-spec "testing" "Patient?family=Pereh,Pérez&given=John,Juan")
+  
+  (param-process "Observation" {:name "code-quantity",
+                                :join :fhir.search.join/or,
+                                :params [{:name "code", :value "loinc|12907-2"} {:name "value", :value "150"}],
+                                :composite true})
   
   :.
   )

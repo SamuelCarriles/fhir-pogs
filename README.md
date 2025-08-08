@@ -206,6 +206,20 @@ This library is in active development. Some functions may change, and new featur
   - [X] Support clause generation for simple search parameters.
   - [X] Support clause generation for search parameters with multiple values.
   - [ ] Support clause generation for composite search parameters.
+  - [ ] Support FHIR search modifiers and prefixies.
+    - [ ] Support `:above` (only supports [token](https://www.hl7.org/fhir/search.html#3.2.1.5.5.1.3) type search parameters).
+    - [ ] Support `:below` (only supports [token](https://www.hl7.org/fhir/search.html#3.2.1.5.5.2.3) type search parameters).
+    - [X] Support `:exact`.
+    - [ ] Support `:contains`.
+    - [X] Support `:in`.
+    - [X] Support `not-in`.
+    - [ ] Support `:code-text`.
+    - [ ] Support `:identifier`.
+    - [ ] Support `:missing`.
+    - [ ] Support `:not`.
+    - [ ] Support `:of-type`.
+    - [ ] Support `:text`.
+    - [ ] Support `:code-text`.
   - [ ] Support clause generation for chained search parameters.
   - [ ] Support clause generation for reverse-chained search parameters.
 - [ ] Define `fhir-pogs.search/format` to format search results in compliance with FHIR search standards.

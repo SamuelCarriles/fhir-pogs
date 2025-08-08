@@ -1,9 +1,8 @@
 (ns fhir-pogs.search.modifiers
-  (:require [clj-http.client :as http]
-            [cheshire.core :as json]
+  (:require [clj-http.client :as http] 
             [clojure.string :as str]))
 
-(def ^:private terminology-server "https://tx.fhir.org/r4")
+(def terminology-server "https://tx.fhir.org/r4")
 
 (defn expand-valueset [valueset-url]
   (try
@@ -16,9 +15,9 @@
     (catch Exception e (println (str "Error: " (.getMessage e)))
            nil)))
 
-(expand-valueset "http://hl7.org/fhir/ValueSet/administrative-gender")
-
-
+(defn get-valueset-codes [url]
+  (->> (get-in (expand-valueset url) [:expansion :contains])
+       (map :code)))
 
 (defn get-operator [m v]
   (let [op (when-not (nil? m) (-> m name keyword))
@@ -51,11 +50,17 @@
         mod (when m (-> m name keyword))]
     (if mod
       (case mod
-        :exact (str " ? (@ == \"" part1 "\")")
-        :in "Hay que extraer las cosas del value set")
+        :exact (str " ? (@ == \"" part1 "\")") 
+        :in (let [valueset (get-valueset-codes v)]
+              (reduce #(str %1 "@ == \"" %2 "\"" (if (= %2 (last valueset)) ")" " || ")) " ? (" valueset))
+        :not-in (let [valueset (get-valueset-codes v)]
+                  (reduce #(str %1 "@ != \"" %2 "\"" (if (= %2 (last valueset)) ")" " && ")) " ? (" valueset)))
       (if part2
         (str " ? (@.system == " part1 " && @.code == " part2 ")")
         (str "? (@ == \"" v "\")")))))
 
-(g-o nil "http://loinc.org|88765")
+(comment
+(g-o :fhir.search.modifier/in "http://hl7.org/fhir/ValueSet/condition-category") 
+  
+  :.)
 
