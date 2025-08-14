@@ -15,11 +15,13 @@
               :password "postgres"})
 
 (deftest testing-save-resources!
-  (let [select (-> (h/select :*) (h/from :testing_main) sql/format)
-        resources (map mapper/parse-resource (read-json-files))
+  (let [resources (map mapper/parse-resource (read-json-files))
         res-count (count resources)]
-    (crud/save-resources! db-spec "testing" resources)
-    (is (= res-count (count (db/jdbc-execute! db-spec select))))
+    (is (= 1 (count (crud/save-resource! db-spec "testing" (rand-nth resources)))))
     (db/table-remove! db-spec [:all])
-    (crud/save-resource! db-spec "testing" (rand-nth resources))
-    (is (= res-count (count (db/jdbc-execute! db-spec select))))))
+    (is (= res-count (count (crud/save-resources! db-spec "testing" resources))))
+    (db/table-remove! db-spec [:all])
+    (is (= res-count (count (crud/save-resources! db-spec "testing" :specialized {:all [:defaults]} resources))))
+    (db/table-remove! db-spec [:all])
+    (is (= res-count (count (crud/save-resources! db-spec "testing" :specialized {:all [:defaults :id :resourceType]} resources))))
+    (db/table-remove! db-spec [:all])))

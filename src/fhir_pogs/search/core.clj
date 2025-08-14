@@ -69,16 +69,16 @@
   ([restype param]
    (let [base (if-let [join (:join param)]
                 [(-> join name keyword)] [])
-         {:keys [name params modifier value]} param 
-         parse-param (fn [n m v] (gen-param-cond (param-path restype n) m v))] 
+         {:keys [name params modifier value]} param
+         parse-param (fn [n m v] (gen-param-cond (param-path restype n) m v))]
      (if params
-       (reduce (fn [o {:keys [modifier value] :as full-param}] 
-                   (conj o (parse-param n modifier value)))
+       (reduce (fn [o {:keys [modifier value] :as full-param}]
+                 (conj o (parse-param n modifier value)))
                base params)
        (parse-param name modifier value))))
   ([restype type param]
    (cond
-     (= :composite type) 
+     (= :composite type)
      (let [base (if-let [join (:join param)]
                   [(-> join name keyword)] [])
            {:keys [name params modifier value]} param
@@ -96,12 +96,12 @@
 (defn gen-params-cond [restype join prms]
   (when (and restype join prms)
     (let [join (-> join name keyword)
-          conditions (map (fn [{:keys [name params value] :as param}] 
+          conditions (map (fn [{:keys [name params value] :as param}]
                             (cond
                               (and name value (nil? params))
                               (param-process restype param)
                               ;;
-                              (and name params (nil? value)) (cond 
+                              (and name params (nil? value)) (cond
                                                                (:composite param) (param-process restype :composite param)
                                                                (:chained param) (param-process restype :chained param)
                                                                :else (param-process restype param))
@@ -130,18 +130,19 @@
 
 (comment
   ;; Esta es la forma de buscar en jsonb: [:jsonb_path_exists :content [:cast "$.**.given.**? (@ == \"Isabel\" )" :jsonpath]]
-  
+
   ;;Tenemos que saber que las clausulas condicionales van a tener este formato:
   ;; [:operador :campo :valor]
-  
+
   (def db-spec {:dbtype "postgresql"
                 :dbname "resources"
                 :host "localhost"
                 :user "postgres"
                 :port "5432"
                 :password "postgres"})
-  
-  
+
+
+
   {:type "Patient"
    :join :fhir.search.join/and
    :params [{:name "family"
@@ -153,15 +154,44 @@
              :params [{:value "Jhon"}
                       {:value "Sam"}]}]}
   ;;URI: "Patient?family=Doe,Carriles&given=John,Sam"
-  
+
   (search-fhir! db-spec "testing" "Patient?family=Pereh,Pérez&given=John,Juan")
-  
+
   (param-process "Observation" {:name "code-quantity",
                                 :join :fhir.search.join/or,
                                 :params [{:name "code", :value "loinc|12907-2"} {:name "value", :value "150"}],
                                 :composite true})
+  (fhir-pogs.core/save-resources! db-spec "testing" :single [:name {:meta :jsonb}] [{:id "13"
+                                                                                     :resourceType "Patient"
+                                                                                     :name [{:given ["Sam"]
+                                                                                             :family "Altman"}]}
+                                                                                    {:id "asd"
+                                                                                     :resourceType "Observation"
+                                                                                     :status "registred"
+                                                                                     :code {:coding [{:system "http://loinc.org"
+                                                                                                      :code "8310-9"
+                                                                                                      :display "Body temperature"}]}
+                                                                                     :subject {:reference "Patient/13"
+                                                                                               :display "Sam Altman"}}])
+
+  (let [table-prefix "testing"
+        resources [{:id "123" :resourceType "Patient"}]
+        db-spec {:dbtype "postgresql"
+                 :dbname "resources"
+                 :host "localhost"
+                 :user "postgres"
+                 :port "5432"
+                 :password "postgres"}
+        mapping-fields [:name {:meta :jsonb}]
+        ]
+    )
+ (try 
+   (fhir-pogs.core/save-resource! db-spec "testing" [:name :managingOrganization] {:id "234"
+                                                                                   :resourceType "Patient"})
+      (catch Exception e
+        (ex-data e)))
   
-  :.
-  )
+  
+  :.)
 
 
