@@ -8,8 +8,8 @@
   (try (validate fhir-schema resource)
        (catch clojure.lang.ExceptionInfo e 
          (let [errors (->> (ex-data e) :errors set vec)]
-           (throw (ex-info (str "Invalid resource schema\n" (.getMessage e)) {:type :schema-validation
-                                                                      :errors errors}))))))
+           (ex-info (str "Invalid resource schema\n" (.getMessage e)) {:type :schema-validation
+                                                                      :errors errors})))))
 
 (defn valid? [resource]
   (try (validate-resource resource) true 
