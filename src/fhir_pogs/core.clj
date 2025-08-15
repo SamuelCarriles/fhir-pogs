@@ -263,12 +263,12 @@
                                  :constraint {:or [{:value :single}
                                                    {:value :specialized}]}}}))
      ;;
-     (and (= :single mapping-type) (not (vector? mapping-fields)))
+     (and (= :single mapping-type) (map? mapping-fields))
      (throw (ex-info "To do a single mapping, the mapping-fields param must be a vector or list."
                      {:type :argument-validation
                       :name :mapping-fields
                       :value mapping-fields
-                      :expected {:type :vector
+                      :expected {:type {:or [:vector :list]}
                                  :empty false}}))
      ;;
      (and (= :specialized mapping-type) (not (map? mapping-fields)))
@@ -285,14 +285,14 @@
      ;;
      (and (= :specialized mapping-type) (some empty? (vals mapping-fields)))
      (throw (let [k (some #(when-not (->> % second seq) (first %)) mapping-fields)]
-              (ex-info (str "Invalid mapping-fields. The key " k " is associated with an empty vector.")
+              (ex-info (str "Invalid mapping-fields. The key " k " is associated with an empty vector or list.")
                        {:type :argument-validation
                         :name :mapping-fields
                         :value mapping-fields
                         :expected {:type :map
                                    :empty false
                                    :constraint {:structure {:key {:type :keyword}
-                                                            :value {:type :vector
+                                                            :value {:type {:or [:vector :list]}
                                                                     :empty false}
                                                             :multiple true}}}}))))
    ;;
@@ -372,7 +372,7 @@
                             fields (reduce #(if (map? %2) (into %1 (keys %2)) (conj %1 %2)) [] v)
                             valid-fields (vec (remove #{:id :resourcetype} columns))]
                         (when (and (seq columns) (not-every? #(contains? columns %) (flatten (replace {:defaults [:meta :text]} fields))))
-                          (throw (ex-info (str "The table " (name k) " already exists and you can only map these fields ")
+                          (throw (ex-info (str "The table " (name k) " already exists and you can only map these fields " valid-fields)
                                           {:type :argument-validation
                                            :name :mapping-fields
                                            :value (->> fields (replace {:defaults [:meta :text]}) flatten vec)
