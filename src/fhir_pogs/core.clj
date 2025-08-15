@@ -31,7 +31,7 @@
                       :param :id
                       :value (:id resource)
                       :expected {:type :string
-                                 :blank false}
+                                 :could-blank? false}
                       :resource resource}))
      ;;
      (not (:resourceType resource))
@@ -40,7 +40,7 @@
                       :param :resourceType
                       :value (:resourceType resource)
                       :expected {:type :string
-                                 :blank false}
+                                 :could-blank? false}
                       :resource resource}))
      ;;
      (not (map? db-spec))
@@ -49,7 +49,7 @@
                       :name :db-spec
                       :value db-spec
                       :expected {:type :map
-                                 :empty false}}))
+                                 :could-empty? false}}))
      ;;
      (not (map? resource))
      (throw (ex-info "The resource must be a map."
@@ -57,7 +57,7 @@
                       :name :resource
                       :value resource
                       :expected {:type :map
-                                 :empty false}}))
+                                 :could-empty? false}}))
      ;;
      (not (v/valid? resource))
      (throw (v/validate-resource resource)))
@@ -77,7 +77,7 @@
                       :param :id
                       :value (:id resource)
                       :expected {:type :string
-                                 :blank false}
+                                 :could-blank? false}
                       :resource resource}))
      ;;
      (not (:resourceType resource))
@@ -86,7 +86,7 @@
                       :param :resourceType
                       :value (:resourceType resource)
                       :expected {:type :string
-                                 :blank false}
+                                 :could-blank? false}
                       :resource resource}))
      ;;
      (not (map? db-spec))
@@ -95,7 +95,7 @@
                       :name :db-spec
                       :value db-spec
                       :expected {:type :map
-                                 :empty false}}))
+                                 :could-empty? false}}))
      ;;
      (not (vector? mapping-fields))
      (throw (ex-info "The mapping-fields param must be a vector."
@@ -103,7 +103,7 @@
                       :name :mapping-fields
                       :value mapping-fields
                       :expected {:type :vector
-                                 :empty false}}))
+                                 :could-empty? false}}))
      ;;
      (empty? mapping-fields)
      (throw (ex-info "Mapping-fields param is empty."
@@ -111,7 +111,7 @@
                       :name :mapping-fields
                       :value mapping-fields
                       :expected {:type :vector
-                                 :empty false}}))
+                                 :could-empty? false}}))
      ;;
      (not (map? resource))
      (throw (ex-info "The resource must be a map."
@@ -119,7 +119,7 @@
                       :name :resource
                       :value resource
                       :expected {:type :map
-                                 :empty false}}))
+                                 :could-empty? false}}))
      ;;
      (not (v/valid? resource))
      (throw (v/validate-resource resource))
@@ -162,7 +162,7 @@
                         :param :id
                         :value id
                         :expected {:type :string
-                                   :blank false}
+                                   :could-blank? false}
                         :resource resource})))
      ;;
      (not-every? :resourceType resources)
@@ -173,7 +173,7 @@
                         :param :resourceType
                         :value rtype
                         :expected {:type :string
-                                   :blank false}
+                                   :could-blank? false}
                         :resource resource})))
      ;;
      (not (map? db-spec))
@@ -182,7 +182,7 @@
                       :name :db-spec
                       :value db-spec
                       :expected {:type :map
-                                 :empty false}}))
+                                 :could-empty? false}}))
      ;;
      (map? resources)
      (throw (ex-info "The resources param must be a list or a vector."
@@ -190,7 +190,7 @@
                       :name :resources
                       :value resources
                       :expected {:type {:or [:vector :list]}
-                                 :empty false}}))
+                                 :could-empty? false}}))
      ;;
      (not-every? v/valid? resources)
      (throw (let [invalid-resource (some #(when-not (v/valid? %) %) resources)
@@ -218,7 +218,7 @@
                         :param :id
                         :value id
                         :expected {:type :string
-                                   :blank false}
+                                   :could-blank? false}
                         :resource resource})))
      ;;
      (not-every? :resourceType resources)
@@ -229,7 +229,7 @@
                         :param :resourceType
                         :value rtype
                         :expected {:type :string
-                                   :blank false}
+                                   :could-blank? false}
                         :resource resource})))
      ;;
      (not (map? db-spec))
@@ -238,7 +238,7 @@
                       :name :db-spec
                       :value db-spec
                       :expected {:type :map
-                                 :empty false}}))
+                                 :could-empty? false}}))
      ;;
      (map? resources)
      (throw (ex-info "The resources param must be a list or a vector."
@@ -246,7 +246,7 @@
                       :name :resources
                       :value resources
                       :expected {:type {:or [:vector :list]}
-                                 :empty false}}))
+                                 :could-empty? false}}))
      ;;
      (not-every? v/valid? resources)
      (throw (let [invalid-resource (some #(when-not (v/valid? %) %) resources)
@@ -268,8 +268,24 @@
                      {:type :argument-validation
                       :name :mapping-fields
                       :value mapping-fields
-                      :expected {:type {:or [:vector :list]}
-                                 :empty false}}))
+                      :expected
+                      {:type {:or [:vector :list]}
+                       :could-empty? false
+                       :constraint
+                       {:structure
+                        {:elements
+                         {:type {:or [:keyword :map]}
+                          :constraint
+                          {:when
+                           {:condition {:type :map}
+                            :then
+                            {:constraint
+                             {:could-empty? false
+                              :structure
+                              {:key {:type :keyword}
+                               :value {:type :keyword}
+                               :multiple true}}}}}}
+                         :multiple true}}}}))
      ;;
      (and (= :specialized mapping-type) (not (map? mapping-fields)))
      (throw (ex-info "To do a specialized mapping, the mapping-fields param must be a map."
@@ -277,11 +293,30 @@
                       :name :mapping-fields
                       :value mapping-fields
                       :expected {:type :map
-                                 :empty false
-                                 :constraint {:structure {:key {:type :keyword}
-                                                          :value {:type :vector
-                                                                  :empty false}
-                                                          :multiple true}}}}))
+                                 :could-empty? false
+                                 :constraint
+                                 {:structure
+                                  {:key {:type :keyword}
+                                   :value
+                                   {:type :vector
+                                    :could-empty? false
+                                    :constraint
+                                    {:structure
+                                     {:elements
+                                      {:type
+                                       {:or [:keyword :map]}
+                                       :constraint
+                                       {:when
+                                        {:condition {:type :map}
+                                         :then
+                                         {:constraint
+                                          {:could-empty? false
+                                           :structure
+                                           {:key {:type :keyword}
+                                            :value {:type :keyword}
+                                            :multiple true}}}}}}
+                                      :multiple true}}}
+                                   :multiple true}}}}))
      ;;
      (and (= :specialized mapping-type) (some empty? (vals mapping-fields)))
      (throw (let [k (some #(when-not (->> % second seq) (first %)) mapping-fields)]
