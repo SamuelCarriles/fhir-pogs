@@ -128,7 +128,7 @@
 (defn fields-types "Returns a map where each key is a field and its associated value is the data type of that field.\n- `f`: a vector with the fields whose data types are to be determined. Within this vector, there may be maps for fields that do not appear in the resource but still need to be created in the table, where each key is a field and the value is the data type. Both key and value are keywords.\n- `r`: the FHIR resource converted into a Clojure map."
   ([f r]
    (let [final (apply merge (filter map? f))
-         fields (remove map? f)]
+         fields (remove #(or (map? %) (contains? #{:id :resourceType} %)) f)]
      (merge final (reduce (fn [x y]
                             (if-let [value (if (or (seq? r) (vector? r)) (some (fn [x] (when (contains? x y) (get x y))) r)
                                                (get r y))]

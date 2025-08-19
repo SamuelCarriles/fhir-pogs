@@ -160,37 +160,8 @@
   (param-process "Observation" {:name "code-quantity",
                                 :join :fhir.search.join/or,
                                 :params [{:name "code", :value "loinc|12907-2"} {:name "value", :value "150"}],
-                                :composite true})
-  (fhir-pogs.core/save-resources! db-spec "testing" :single [:name {:meta :jsonb}] [{:id "13"
-                                                                                     :resourceType "Patient"
-                                                                                     :name [{:given ["Sam"]
-                                                                                             :family "Altman"}]}
-                                                                                    {:id "asd"
-                                                                                     :resourceType "Observation"
-                                                                                     :status "registred"
-                                                                                     :code {:coding [{:system "http://loinc.org"
-                                                                                                      :code "8310-9"
-                                                                                                      :display "Body temperature"}]}
-                                                                                     :subject {:reference "Patient/13"
-                                                                                               :display "Sam Altman"}}])
-
-  (let [table-prefix "testing"
-        resources [{:id "123" :resourceType "Patient"}]
-        db-spec {:dbtype "postgresql"
-                 :dbname "resources"
-                 :host "localhost"
-                 :user "postgres"
-                 :port "5432"
-                 :password "postgres"}
-        mapping-fields [:name {:meta :jsonb}]
-        ]
-    )
- (try 
-   (fhir-pogs.core/save-resource! db-spec "testing" [:name :managingOrganization] {:id "234"
-                                                                                   :resourceType "Patient"})
-      (catch Exception e
-        (ex-data e)))
-  
+                                :composite true}) 
+ 
   
   :.)
 

@@ -29,40 +29,34 @@
      (throw (ex-info "Invalid resource. The key :id is required."
                      {:type :resource-validation
                       :param :id
-                      :value (:id resource)
-                      :expected {:type :string
-                                 :could-blank? false}
-                      :resource resource}))
+                      :value nil
+                      :expected "non-blank string"
+                      :got "nil value"}))
      ;;
      (not (:resourceType resource))
      (throw (ex-info "Invalid resource. The key :resourceType is required."
                      {:type :resource-validation
                       :param :resourceType
-                      :value (:resourceType resource)
-                      :expected {:type :string
-                                 :could-blank? false}
-                      :resource resource}))
+                      :value nil
+                      :expected "non-blank string"
+                      :got "nil value"}))
      ;;
      (not (map? db-spec))
      (throw (ex-info "The db-spec must be a map."
                      {:type :argument-validation
                       :name :db-spec
-                      :value db-spec
-                      :expected {:type :map
-                                 :could-empty? false}}))
+                      :expected "non-empty map"
+                      :got (-> db-spec type .getSimpleName)}))
      ;;
      (not (map? resource))
      (throw (ex-info "The resource must be a map."
                      {:type :argument-validation
                       :name :resource
-                      :value resource
-                      :expected {:type :map
-                                 :could-empty? false}}))
-     ;;
-     (not (v/valid? resource))
-     (throw (v/validate-resource resource)))
+                      :expected "non-empty map"
+                      :got (-> resource type .getSimpleName)})))
 
    ;;Operation block
+   (v/validate-resource resource)
    (let [restype (:resourceType resource)
          base [(mapper/create-table table-prefix)]
          sentence (into base (mapper/insert-to-sentence (mapper/template table-prefix [] resource) restype))]
@@ -75,69 +69,71 @@
      (throw (ex-info "Invalid resource. The key :id is required."
                      {:type :resource-validation
                       :param :id
-                      :value (:id resource)
-                      :expected {:type :string
-                                 :could-blank? false}
-                      :resource resource}))
+                      :value nil
+                      :expected "non-blank string"
+                      :got "nil value"}))
      ;;
      (not (:resourceType resource))
      (throw (ex-info "Invalid resource. The key :resourceType is required."
                      {:type :resource-validation
                       :param :resourceType
-                      :value (:resourceType resource)
-                      :expected {:type :string
-                                 :could-blank? false}
-                      :resource resource}))
+                      :value nil
+                      :expected "non-blank string"
+                      :got "nil value"}))
      ;;
      (not (map? db-spec))
      (throw (ex-info "The db-spec must be a map."
                      {:type :argument-validation
                       :name :db-spec
-                      :value db-spec
-                      :expected {:type :map
-                                 :could-empty? false}}))
+                      :expected "non-empty map"
+                      :got (-> db-spec type .getSimpleName)}))
      ;;
      (not (vector? mapping-fields))
      (throw (ex-info "The mapping-fields param must be a vector."
                      {:type :argument-validation
                       :name :mapping-fields
-                      :value mapping-fields
-                      :expected {:type :vector
-                                 :could-empty? false}}))
+                      :expected "non-empty vector"
+                      :got (-> mapping-fields type .getSimpleName)}))
      ;;
      (empty? mapping-fields)
      (throw (ex-info "Mapping-fields param is empty."
                      {:type :argument-validation
                       :name :mapping-fields
-                      :value mapping-fields
-                      :expected {:type :vector
-                                 :could-empty? false}}))
+                      :expected "non-empty vector"
+                      :got (-> mapping-fields type .getSimpleName)}))
      ;;
      (not (map? resource))
      (throw (ex-info "The resource must be a map."
                      {:type :argument-validation
                       :name :resource
-                      :value resource
-                      :expected {:type :map
-                                 :could-empty? false}}))
-     ;;
-     (not (v/valid? resource))
-     (throw (v/validate-resource resource))
-     ;;
+                      :expected "non-empty map"
+                      :got (-> resource type .getSimpleName)}))
+     ;; 
      (let [table (str table-prefix "_" (.toLowerCase (:resourceType resource)))
            columns (db/get-columns-of! db-spec table)
-           fields (reduce #(if (map? %2) (into %1 (keys %2)) (conj %1 %2)) [] (flatten (replace {:defaults [:meta :text]} mapping-fields)))]
+           fields (->> mapping-fields 
+                       (replace {:defaults [:meta :text]}) 
+                       flatten 
+                       (reduce #(if (map? %2) 
+                                  (into %1 (keys %2)) 
+                                  (conj %1 %2)) 
+                               []))]
+       
        (when-not (empty? columns) (not-every? #(get columns %) fields)))
      (let [table (str table-prefix "_" (.toLowerCase (:resourceType resource)))
-           columns (db/get-columns-of! db-spec table)]
-       (throw (ex-info (str "The table " table " already exists and you can only map these fields " (vec (remove #{:id :resourcetype} columns)))
+           columns (db/get-columns-of! db-spec table)
+           valid-fields (vec (remove #{:id :resourcetype} columns))]
+       (throw (ex-info (str "The table " table " already exists and you can only map these fields " valid-fields)
                        {:type :argument-validation
                         :name :mapping-fields
                         :value (->> mapping-fields (replace {:defaults [:meta :text]}) flatten vec)
-                        :expected (vec (remove #{:id :resourcetype} columns))}))))
+                        :expected valid-fields
+                        :got "invalid fields to map"}))))
 
    ;;Operation block
-   (let [fields (mapper/fields-types (remove #{:id :resourceType} mapping-fields) resource)
+   (v/validate-mapping-fields mapping-fields :single)
+   (v/validate-resource resource)
+   (let [fields (mapper/fields-types mapping-fields resource)
          restype (:resourceType resource)
          base [(mapper/create-table table-prefix)]
          sentence (if (some #(get resource %) (keys fields)) (conj base (mapper/create-table  table-prefix restype fields)) base)]
@@ -156,46 +152,42 @@
    (cond
      (not-every? :id resources)
      (throw (ex-info "Invalid resource. The key :id is required."
-                     (let [resource (some #(when-not (:id %) %) resources)
-                           id (:id resource)]
+                     (let [idx (some #(when-not (:id %) (.indexOf (vec resources) %)) resources)]
                        {:type :resource-validation
                         :param :id
-                        :value id
-                        :expected {:type :string
-                                   :could-blank? false}
-                        :resource resource})))
+                        :value nil
+                        :expected "non-empty string"
+                        :got "nil value"
+                        :resource-index idx})))
      ;;
      (not-every? :resourceType resources)
      (throw (ex-info "Invalid resource. The key :resourceType is required."
-                     (let [resource (some #(when-not (:resourceType %) %) resources)
-                           rtype (:resourceType resource)]
+                     (let [idx (some #(when-not (:resourceType %) (.indexOf (vec resources) %)) resources)]
                        {:type :resource-validation
                         :param :resourceType
-                        :value rtype
-                        :expected {:type :string
-                                   :could-blank? false}
-                        :resource resource})))
+                        :value nil
+                        :expected "non-empty string"
+                        :got "nil value"
+                        :resource-index idx})))
      ;;
      (not (map? db-spec))
      (throw (ex-info "The db-spec must be a map."
                      {:type :argument-validation
                       :name :db-spec
-                      :value db-spec
-                      :expected {:type :map
-                                 :could-empty? false}}))
+                      :expected "non-empty map"
+                      :got (-> db-spec type .getSimpleName)}))
      ;;
-     (map? resources)
+     (or (list? resources) (vector? resources))
      (throw (ex-info "The resources param must be a list or a vector."
                      {:type :argument-validation
-                      :name :resources
-                      :value resources
-                      :expected {:type {:or [:vector :list]}
-                                 :could-empty? false}}))
+                      :name :resources 
+                      :expected "non-empty list or vector"
+                      :got (-> resources type .getSimpleName)}))
      ;;
-     (not-every? v/valid? resources)
-     (throw (let [invalid-resource (some #(when-not (v/valid? %) %) resources)
-                  invalid-id (:id invalid-resource)]
-              (ex-info (str "The resource with id \"" invalid-id "\" is invalid.")
+     (not-every? v/valid-resource? resources)
+     (throw (let [invalid-resource (some #(when-not (v/valid-resource? %) %) resources)
+                  idx (.indexOf (vec resources) invalid-resource)]
+              (ex-info (str "The resource at index " idx " is invalid.")
                        (assoc {:type :schema-validation} :errors (->> invalid-resource v/validate-resource ex-data :errors))))))
 
    ;;Operation block 
@@ -212,129 +204,70 @@
    (cond
      (not-every? :id resources)
      (throw (ex-info "Invalid resource. The key :id is required."
-                     (let [resource (some #(when-not (:id %) %) resources)
-                           id (:id resource)]
+                     (let [idx (some #(when-not (:id %) (.indexOf (vec resources) %)) resources)]
                        {:type :resource-validation
                         :param :id
-                        :value id
-                        :expected {:type :string
-                                   :could-blank? false}
-                        :resource resource})))
+                        :value nil
+                        :expected "non-empty string"
+                        :got "nil value"
+                        :resource-index idx})))
      ;;
      (not-every? :resourceType resources)
      (throw (ex-info "Invalid resource. The key :resourceType is required."
-                     (let [resource (some #(when-not (:resourceType %) %) resources)
-                           rtype (:resourceType resource)]
+                     (let [idx (some #(when-not (:resourceType %) (.indexOf (vec resources) %)) resources)]
                        {:type :resource-validation
                         :param :resourceType
-                        :value rtype
-                        :expected {:type :string
-                                   :could-blank? false}
-                        :resource resource})))
+                        :value nil
+                        :expected "non-empty string"
+                        :got "nil value"
+                        :resource-index idx})))
      ;;
      (not (map? db-spec))
      (throw (ex-info "The db-spec must be a map."
                      {:type :argument-validation
                       :name :db-spec
-                      :value db-spec
-                      :expected {:type :map
-                                 :could-empty? false}}))
+                      :expected "non-empty map"
+                      :got (-> db-spec type .getSimpleName)}))
      ;;
-     (map? resources)
+     (not (or (list? resources) (vector? resources)))
      (throw (ex-info "The resources param must be a list or a vector."
                      {:type :argument-validation
                       :name :resources
-                      :value resources
-                      :expected {:type {:or [:vector :list]}
-                                 :could-empty? false}}))
+                      :expected "non-empty list or vector"
+                      :got (-> resources type .getSimpleName)}))
      ;;
-     (not-every? v/valid? resources)
-     (throw (let [invalid-resource (some #(when-not (v/valid? %) %) resources)
-                  invalid-id (:id invalid-resource)]
-              (ex-info (str "The resource with id \"" invalid-id "\" is invalid.")
+     (not-every? v/valid-resource? resources)
+     (throw (let [invalid-resource (some #(when-not (v/valid-resource? %) %) resources)
+                  idx (.indexOf (vec resources) invalid-resource)]
+              (ex-info (str "The resource at index " idx " is invalid.")
                        (assoc {:type :schema-validation} :errors (->> invalid-resource v/validate-resource ex-data :errors)))))
      ;;  
      (not (keyword? mapping-type))
      (throw (ex-info "The mapping-type must be a keyword."
                      {:type :argument-validation
-                      :name :mapping-type
-                      :value mapping-type
-                      :expected {:type :keyword
-                                 :constraint {:or [{:value :single}
-                                                   {:value :specialized}]}}}))
+                      :name :mapping-type 
+                      :expected ":single or :specialized"
+                      :got mapping-type}))
      ;;
-     (and (= :single mapping-type) (map? mapping-fields))
-     (throw (ex-info "To do a single mapping, the mapping-fields param must be a vector or list."
+     (and (= :single mapping-type) (not (vector? mapping-fields)))
+     (throw (ex-info "Mapping-fields invalid. To do a single mapping, the mapping-fields param must be a vector."
                      {:type :argument-validation
-                      :name :mapping-fields
-                      :value mapping-fields
-                      :expected
-                      {:type {:or [:vector :list]}
-                       :could-empty? false
-                       :constraint
-                       {:structure
-                        {:elements
-                         {:type {:or [:keyword :map]}
-                          :constraint
-                          {:when
-                           {:condition {:type :map}
-                            :then
-                            {:constraint
-                             {:could-empty? false
-                              :structure
-                              {:key {:type :keyword}
-                               :value {:type :keyword}
-                               :multiple true}}}}}}
-                         :multiple true}}}}))
+                      :name :mapping-fields 
+                      :expected "non-empty vector"
+                      :got (-> mapping-fields type .getSimpleName)}))
      ;;
      (and (= :specialized mapping-type) (not (map? mapping-fields)))
-     (throw (ex-info "To do a specialized mapping, the mapping-fields param must be a map."
+     (throw (ex-info "Mapping-fields invalid. To do a specialized mapping, the mapping-fields param must be a map."
                      {:type :argument-validation
                       :name :mapping-fields
-                      :value mapping-fields
-                      :expected {:type :map
-                                 :could-empty? false
-                                 :constraint
-                                 {:structure
-                                  {:key {:type :keyword}
-                                   :value
-                                   {:type :vector
-                                    :could-empty? false
-                                    :constraint
-                                    {:structure
-                                     {:elements
-                                      {:type
-                                       {:or [:keyword :map]}
-                                       :constraint
-                                       {:when
-                                        {:condition {:type :map}
-                                         :then
-                                         {:constraint
-                                          {:could-empty? false
-                                           :structure
-                                           {:key {:type :keyword}
-                                            :value {:type :keyword}
-                                            :multiple true}}}}}}
-                                      :multiple true}}}
-                                   :multiple true}}}}))
-     ;;
-     (and (= :specialized mapping-type) (some empty? (vals mapping-fields)))
-     (throw (let [k (some #(when-not (->> % second seq) (first %)) mapping-fields)]
-              (ex-info (str "Invalid mapping-fields. The key " k " is associated with an empty vector or list.")
-                       {:type :argument-validation
-                        :name :mapping-fields
-                        :value mapping-fields
-                        :expected {:type :map
-                                   :empty false
-                                   :constraint {:structure {:key {:type :keyword}
-                                                            :value {:type {:or [:vector :list]}
-                                                                    :empty false}
-                                                            :multiple true}}}}))))
+                      :expected "non-empty map"
+                      :got (-> mapping-fields type .getSimpleName)})))
    ;;
    (cond
-     (= :single mapping-type)
+     (= :single mapping-type) 
      (do
        ;;This block is to validate the mapping-fields vector
+       (v/validate-mapping-fields mapping-fields :single)
        (let [table (->> (first resources) :resourceType .toLowerCase (str table-prefix "_"))
              columns (db/get-columns-of! db-spec table)
              fields (reduce #(if (map? %2) (into %1 (keys %2)) (conj %1 %2)) [] (flatten (replace {:defaults [:meta :text]} mapping-fields)))]
@@ -353,7 +286,7 @@
                             :name :resources
                             :value resources
                             :expected {:type {:or [:vector :list]}
-                                       :empty false
+                                       :could-empty? false
                                        :constraint {:structure {:elements {:type :map}
                                                                 :multiple true
                                                                 :constraint {:same :resourceType}}}}}))))
@@ -373,6 +306,7 @@
 
      (do
        ;;Validation block
+       (v/validate-mapping-fields mapping-fields :specialized)
        (if-let [f (:all mapping-fields)]
          (->> (db/get-tables! db-spec)
               (remove #(or (not (re-find (re-pattern (str table-prefix ".*")) (name %)))
@@ -433,11 +367,9 @@
      :else
      (throw (ex-info "The mapping-type given is invalid. Use :single or :specialized."
                      {:type :argument-validation
-                      :name :mapping-type
-                      :value mapping-type
-                      :expected {:type :keyword
-                                 :constraint {:or [{:value :single}
-                                                   {:value :specialized}]}}})))))
+                      :name :mapping-type 
+                      :expected ":single or :specialized"
+                      :got mapping-type})))))
 
 (defn search-resources! "Retorna una seq con los recursos encontrados."
   [db-spec ^String table-prefix ^String restype conditions]
