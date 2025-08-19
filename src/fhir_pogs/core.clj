@@ -284,12 +284,8 @@
            (throw (ex-info (str "Invalid resources given to :single mapping-type. Resource with id \"" (:id res) "\" don't have \"" restype "\" resourceType.")
                            {:type :argument-validation
                             :name :resources
-                            :value resources
-                            :expected {:type {:or [:vector :list]}
-                                       :could-empty? false
-                                       :constraint {:structure {:elements {:type :map}
-                                                                :multiple true
-                                                                :constraint {:same :resourceType}}}}}))))
+                            :expected "coll of resources with tne same :resourceType"
+                            :got "coll of reources with different :resourceType"}))))
 
        ;;This block is to store all resources within a transaction 
        (->> (reduce (fn [o r]
@@ -374,8 +370,16 @@
 (defn search-resources! "Retorna una seq con los recursos encontrados."
   [db-spec ^String table-prefix ^String restype conditions]
   (cond
-    (not (map? db-spec)) (throw (IllegalArgumentException. "db-spec must be a map."))
-    (not (vector? conditions)) (throw (IllegalArgumentException. "conditions must be a vector.")))
+    (not (map? db-spec)) (throw (ex-info "db-spec must be a map" 
+                                         {:type :argument-validation
+                                          :name :db-spec
+                                          :expected "non-empty map"
+                                          :got (-> db-spec type .getSimpleName)}))
+    (not (vector? conditions)) (throw (ex-info "conditions must be a vector"
+                                               {:type :argument-validation
+                                                :name :conditions
+                                                :expected "non-empty vector"
+                                                :got (-> db-spec type .getSimpleName)})))
   (let [table (keyword (str table-prefix "_" (.toLowerCase restype)))
         main (keyword (str table-prefix "_main"))
         all-cond (into [:and [:= (keyword "m.resourcetype") restype]] conditions)]
@@ -400,8 +404,16 @@
 
 (defn delete-resources! [db-spec ^String table-prefix ^String restype conditions]
   (cond
-    (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
-    (not (vector? conditions)) (throw (IllegalArgumentException. "conditions must be a vector.")))
+    (not (map? db-spec)) (throw (ex-info "db-spec must be a map"
+                                         {:type :argument-validation
+                                          :name :db-spec
+                                          :expected "non-empty map"
+                                          :got (-> db-spec type .getSimpleName)}))
+    (not (vector? conditions)) (throw (ex-info "conditions must be a vector"
+                                               {:type :argument-validation
+                                                :name :conditions
+                                                :expected "non-empty vector"
+                                                :got (-> db-spec type .getSimpleName)})))
   (when (seq (search-resources! db-spec table-prefix restype conditions))
     (let [table (keyword (str table-prefix "_main"))
           sentence (-> (help/delete-from table)
@@ -411,9 +423,21 @@
 
 (defn update-resource! [db-spec ^String table-prefix ^String restype ^String id new-content]
   (cond
-    (not (map? db-spec)) (throw (IllegalArgumentException. "The db-spec parameter must be a map."))
-    (or (not (:id new-content)) (not (v/valid? new-content))) (throw (IllegalArgumentException. "The resource update are invalid."))
-    (or (not= restype (:resourceType new-content)) (not= id (:id new-content))) (throw (IllegalArgumentException. "The id and resource type of resource update must be equal to the original id and resource type.")))
+    (not (map? db-spec)) (throw (ex-info "The db-spec parameter must be a map."
+                                         {:type :argument-validation
+                                          :name :db-spec
+                                          :expected "non-empty map"
+                                          :got (-> db-spec type .getSimpleName)}))
+    (or (not (:id new-content)) (not (v/valid-resource? new-content))) 
+    (v/validate-resource new-content)
+
+    (or (not= restype (:resourceType new-content)) (not= id (:id new-content))) 
+    (throw (ex-info "The new-content arg must have the same :id and :resourceType as the resource to be updated"
+                    {:type :argument-validation
+                     :name :new-content
+                     :expected "A resource with the same :id and :resourceType as the one to be updated"
+                     :got (str "A resource with different " (if (not= restype (:resourceType new-content)) ":resourceType" ":id")) })))
+  
   (when (seq (search-resources! db-spec table-prefix restype [[:= :resource_id id] [:= :resourceType restype]]))
     (let [main (keyword (str table-prefix "_main"))
           table (keyword (str table-prefix "_" (.toLowerCase restype)))
