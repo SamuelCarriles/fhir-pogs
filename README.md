@@ -79,13 +79,13 @@ The resulting tables from the previous example are as follows:
 
 |resource_id|resourcetype|content|
 |:-:|:----------:|:-----:|
-|example|Patient|"{"id" : "example"...}"|
+|example|Patient|{"id" : "example"...}|
 ---
 *fhir_resources_patient*
 
 |id|resourcetype|text|
 |:---------:|:--:|:--:|
-|example|Patient|"{"status" : "generated"...}"|
+|example|Patient|{"status" : "generated"...}|
 ---
 The resource don't have `:meta`, therefore the `meta` column was not created in *fhir_resources_patient*.
 
@@ -193,7 +193,7 @@ To delete resources from the database, use `delete-resources!`:
 ```
 This function works just like `search-resources!`, except instead of returning a sequence of resources, it gives you a `fully-realized` result set from `next.jdbc` to confirm the operation went through.
 ## 📈Status: In Development
-This library is in active development. Some functions may change, and new features are coming soon.  
+This library is in active development. The **core functions** (CRUD) are ready to use. The **search** namespace is currently under development and will be included in future release. 
 
 ## ✴️Coming Soon  
 - [X] Map FHIR resources (JSON/Clojure) to PostgreSQL tables.

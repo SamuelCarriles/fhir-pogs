@@ -130,10 +130,10 @@
 
 (comment
   ;; Esta es la forma de buscar en jsonb: [:jsonb_path_exists :content [:cast "$.**.given.**? (@ == \"Isabel\" )" :jsonpath]]
-
+  
   ;;Tenemos que saber que las clausulas condicionales van a tener este formato:
   ;; [:operador :campo :valor]
-
+  
   (def db-spec {:dbtype "postgresql"
                 :dbname "resources"
                 :host "localhost"
@@ -154,15 +154,14 @@
              :params [{:value "Jhon"}
                       {:value "Sam"}]}]}
   ;;URI: "Patient?family=Doe,Carriles&given=John,Sam"
-
+  
   (search-fhir! db-spec "testing" "Patient?family=Pereh,Pérez&given=John,Juan")
 
   (param-process "Observation" {:name "code-quantity",
                                 :join :fhir.search.join/or,
                                 :params [{:name "code", :value "loinc|12907-2"} {:name "value", :value "150"}],
                                 :composite true}) 
- 
-  
-  :.)
+  :.
+  )
 
 

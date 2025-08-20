@@ -128,11 +128,11 @@
                         :name :mapping-fields
                         :value (->> mapping-fields (replace {:defaults [:meta :text]}) flatten vec)
                         :expected valid-fields
-                        :got "invalid fields to map"}))))
-
-   ;;Operation block
+                        :got "invalid fields to map"})))) 
+   
    (v/validate-mapping-fields mapping-fields :single)
    (v/validate-resource resource)
+   ;;Operation block
    (let [fields (mapper/fields-types mapping-fields resource)
          restype (:resourceType resource)
          base [(mapper/create-table table-prefix)]
@@ -146,7 +146,7 @@
  \n- `:single`: all resources are of the same type, so they can be inserted into a single table. For this type, the mapping-fields parameter is a vector of fields in keyword format.  
  \n- `:specialized`: resources are of various types, so a separate table is created for each resource type. For this type, mapping-fields is a map where the keys are the resource types and the values are vectors containing the fields in keyword format. There are two reserved keywords: `:all` and `:others`. The first is used when specifying the fields to extract from all resources, and the second when specific resource types and their fields have been defined, and additional fields need to be specified for any other resource types. It is recommended to always include :others, but if omitted and a resource of an unspecified type is encountered, only the basic fields will be mapped in the main or controlling table. By basic fields we mean :id, :resourceType, and :content.  
  \nExample of a function call: \n```clojure \n(save-resources! db-spec \"fhir_reources\" :single [:defaults] <resources>) \n(save-resources! db-spec \"fhir_resources_database\" :specialized {:all [:text]} <resources>)
-(save-resources! db-spec \"fhir_resources_database\" :specialized {:patient [:defaults :name], :others [:defaults]} <resources>)"
+ (save-resources! db-spec \"fhir_resources_database\" :specialized {:patient [:defaults :name], :others [:defaults]} <resources>)"
   ([db-spec ^String table-prefix resources]
    ;;Validation block
    (cond
@@ -299,7 +299,6 @@
             (db/jdbc-transaction! db-spec)
             mapper/return-value-process))
      (= :specialized mapping-type)
-
      (do
        ;;Validation block
        (v/validate-mapping-fields mapping-fields :specialized)
@@ -367,7 +366,11 @@
                       :expected ":single or :specialized"
                       :got mapping-type})))))
 
-(defn search-resources! "Retorna una seq con los recursos encontrados."
+(defn search-resources! "Return a coll of the resources found.\n This function takes four arguments:
+ - `db-spec`: the database config where the search will happen.
+ - `table-prefix`: the prefix used for the tables you're working with.
+ - `restype`: the type of resource you're looking for.
+ - `conditions`: a vector of vectors, each one representing a condition that the resource has to meet to be returned."
   [db-spec ^String table-prefix ^String restype conditions]
   (cond
     (not (map? db-spec)) (throw (ex-info "db-spec must be a map" 
@@ -402,7 +405,8 @@
        (mapcat vals)
        (map mapper/parse-jsonb-obj)))))
 
-(defn delete-resources! [db-spec ^String table-prefix ^String restype conditions]
+(defn delete-resources! "This function works just like `search-resources!`, except instead of returning a sequence of resources, it gives you a fully-realized result set from `next.jdbc` to confirm the operation went through."
+  [db-spec ^String table-prefix ^String restype conditions]
   (cond
     (not (map? db-spec)) (throw (ex-info "db-spec must be a map"
                                          {:type :argument-validation
@@ -421,7 +425,13 @@
                        sql/format)]
       (db/jdbc-execute! db-spec sentence))))
 
-(defn update-resource! [db-spec ^String table-prefix ^String restype ^String id new-content]
+(defn update-resource! "Here’s what you need to pass in:
+ - `db-spec`: your database config.
+ - `table-prefix`: the table prefix you're working with.
+ - `restype`: the type of resource you're updating.
+ - `id`: the ID of the resource you want to update.
+ - `new-content`: the full resource with the updated fields."
+  [db-spec ^String table-prefix ^String restype ^String id new-content]
   (cond
     (not (map? db-spec)) (throw (ex-info "The db-spec parameter must be a map."
                                          {:type :argument-validation
