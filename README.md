@@ -195,17 +195,8 @@ This function works just like `search-resources!`, except instead of returning a
 ## 📈Status: In Development
 This library is in active development. The **core functions** (CRUD) are ready to use. The **search** namespace is currently under development and will be included in future release. 
 
-## ✴️Coming Soon  
-- [X] Map FHIR resources (JSON/Clojure) to PostgreSQL tables.
-- [X] Query stored resources with filters.   
-  - [x] Search by simple and advanced conditions include JSONB fields related conditions.
-- [X] Include validation of resources using fhir schema and luposlip/json-schema library. 
-- [X] Create **CRUD** functions.     
+## ✴️Coming Soon      
 - [ ] Build the necessary tools in `fhir-pogs.search` to transform an AST tree produced by a FHIR search query into condition clauses usable by `fhir-pogs.core/search-resources!`.
-  - [X] Support clause generation for compartment.
-  - [X] Support clause generation for simple search parameters.
-  - [X] Support clause generation for search parameters with multiple values.
-  - [ ] Support clause generation for composite search parameters.
-  - [ ] Support clause generation for chained search parameters.
-  - [ ] Support clause generation for reverse-chained search parameters.
+  - [ ] Support **string search**: names, text fields (family, given, address.city)
+    - [ ] Support :exact, :contains, :missing modifiers
 - [ ] Define `fhir-pogs.search/format` to format search results in compliance with FHIR search standards.
