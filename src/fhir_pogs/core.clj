@@ -60,7 +60,7 @@
    (let [restype (:resourceType resource)
          base [(mapper/create-table table-prefix)]
          sentence (into base (mapper/insert-to-sentence (mapper/template table-prefix [] resource) restype))]
-     (mapper/return-value-process (db/jdbc-transaction! db-spec sentence))))
+     (mapper/return-value-process (db/transact! db-spec sentence))))
 
   ([db-spec ^String table-prefix mapping-fields resource]
    ;;Validation block
@@ -110,7 +110,7 @@
                       :got (-> resource type .getSimpleName)}))
      ;; 
      (let [table (str table-prefix "_" (.toLowerCase (:resourceType resource)))
-           columns (db/get-columns-of! db-spec table)
+           columns (db/get-columns db-spec table)
            fields (->> mapping-fields 
                        (replace {:defaults [:meta :text]}) 
                        flatten 
@@ -121,7 +121,7 @@
        
        (when-not (empty? columns) (not-every? #(get columns %) fields)))
      (let [table (str table-prefix "_" (.toLowerCase (:resourceType resource)))
-           columns (db/get-columns-of! db-spec table)
+           columns (db/get-columns db-spec table)
            valid-fields (vec (remove #{:id :resourcetype} columns))]
        (throw (ex-info (str "The table " table " already exists and you can only map these fields " valid-fields)
                        {:type :argument-validation
@@ -139,7 +139,7 @@
          sentence (if (some #(get resource %) (keys fields)) (conj base (mapper/create-table  table-prefix restype fields)) base)]
      (->> (mapper/insert-to-sentence (mapper/template table-prefix (keys fields) resource) restype)
           (into sentence)
-          (db/jdbc-transaction! db-spec)
+          (db/transact! db-spec)
           mapper/return-value-process))))
 
 (defn save-resources! "Works very similarly to `save-resource!`, with the difference that it handles multiple resources instead of just one. All resources are stored within a transaction. The resources can have two types of mapping:  
@@ -196,7 +196,7 @@
                     (into o (mapper/insert-to-sentence (mapper/template table-prefix [] r) restype))))
                 [] resources)
         (into [(mapper/create-table table-prefix)])
-        (db/jdbc-transaction! db-spec)
+        (db/transact! db-spec)
         mapper/return-value-process))
 
   ([db-spec ^String table-prefix mapping-type mapping-fields resources]
@@ -269,7 +269,7 @@
        ;;This block is to validate the mapping-fields vector
        (v/validate-mapping-fields mapping-fields :single)
        (let [table (->> (first resources) :resourceType .toLowerCase (str table-prefix "_"))
-             columns (db/get-columns-of! db-spec table)
+             columns (db/get-columns db-spec table)
              fields (reduce #(if (map? %2) (into %1 (keys %2)) (conj %1 %2)) [] (flatten (replace {:defaults [:meta :text]} mapping-fields)))]
          (when (and (seq columns) (not-every? #(contains? columns %) fields))
            (throw (ex-info (str "The table " table " already exists and you can only map these fields " (vec (remove #{:id :resourcetype} columns)))
@@ -296,17 +296,17 @@
                         (into o sentences)))
                     [] resources)
             (into [(mapper/create-table table-prefix)])
-            (db/jdbc-transaction! db-spec)
+            (db/transact! db-spec)
             mapper/return-value-process))
      (= :specialized mapping-type)
      (do
        ;;Validation block
        (v/validate-mapping-fields mapping-fields :specialized)
        (if-let [f (:all mapping-fields)]
-         (->> (db/get-tables! db-spec)
+         (->> (db/get-tables db-spec)
               (remove #(or (not (re-find (re-pattern (str table-prefix ".*")) (name %)))
                            (re-find #"_main$" (name %))))
-              (reduce #(assoc %1 %2 (db/get-columns-of! db-spec %2)) {})
+              (reduce #(assoc %1 %2 (db/get-columns db-spec %2)) {})
 
               (some (fn [[t columns]]
                       (let [fields (reduce #(if (map? %2) (into %1 (keys %2)) (conj %1 %2)) [] f)
@@ -321,7 +321,7 @@
          (->> (if-not (:others mapping-fields)
                 (reduce-kv #(assoc %1 (->> %2 name .toLowerCase (str table-prefix "_") keyword) %3) {} mapping-fields)
                 (let [tables-to-remove (->> (dissoc mapping-fields :others) keys (map #(->> % name (str table-prefix "_") keyword)) set)
-                      all-tables (->> (db/get-tables! db-spec)
+                      all-tables (->> (db/get-tables db-spec)
                                       (remove #(or (not (re-find (re-pattern (str table-prefix ".*")) (name %)))
                                                    (re-find #"_main$" (name %)))))
                       other-tables (remove tables-to-remove all-tables)
@@ -332,7 +332,7 @@
                   (->> other-tables
                        (reduce #(assoc %1 %2 other-fields) new-mf-base))))
               (some (fn [[k v]]
-                      (let [columns (db/get-columns-of! db-spec k)
+                      (let [columns (db/get-columns db-spec k)
                             fields (reduce #(if (map? %2) (into %1 (keys %2)) (conj %1 %2)) [] v)
                             valid-fields (vec (remove #{:id :resourcetype} columns))]
                         (when (and (seq columns) (not-every? #(contains? columns %) (flatten (replace {:defaults [:meta :text]} fields))))
@@ -357,7 +357,7 @@
                     []
                     resources)
             (into [(mapper/create-table table-prefix)])
-            (db/jdbc-transaction! db-spec)
+            (db/transact! db-spec)
             mapper/return-value-process))
      :else
      (throw (ex-info "The mapping-type given is invalid. Use :single or :specialized."
@@ -386,9 +386,9 @@
   (let [table (keyword (str table-prefix "_" (.toLowerCase restype)))
         main (keyword (str table-prefix "_main"))
         all-cond (into [:and [:= (keyword "m.resourcetype") restype]] conditions)]
-    (if (contains? (db/get-tables! db-spec) table)
+    (if (contains? (db/get-tables db-spec) table)
       (->>
-       (db/jdbc-execute! db-spec
+       (db/execute! db-spec
                          (-> (help/select :content)
                              (help/from [main :m])
                              (help/join table [:= :resource-id :id])
@@ -397,7 +397,7 @@
        (mapcat vals)
        (map mapper/parse-jsonb-obj))
       (->>
-       (db/jdbc-execute! db-spec
+       (db/execute! db-spec
                          (-> (help/select :content)
                              (help/from [main :m])
                              (help/where all-cond)
@@ -423,7 +423,7 @@
           sentence (-> (help/delete-from table)
                        (help/where conditions)
                        sql/format)]
-      (db/jdbc-execute! db-spec sentence))))
+      (db/execute! db-spec sentence))))
 
 (defn update-resource! "Here’s what you need to pass in:
  - `db-spec`: your database config.
@@ -451,7 +451,7 @@
   (when (seq (search-resources! db-spec table-prefix restype [[:= :resource_id id] [:= :resourceType restype]]))
     (let [main (keyword (str table-prefix "_main"))
           table (keyword (str table-prefix "_" (.toLowerCase restype)))
-          columns (remove #{:resourcetype :id} (db/get-columns-of! db-spec (name table)))
+          columns (remove #{:resourcetype :id} (db/get-columns db-spec (name table)))
           base-sentence [(-> (help/update main)
                              (help/set {:content (mapper/to-pg-obj "jsonb" new-content)})
                              (help/where [:= :resource_id id])
@@ -465,5 +465,5 @@
                                     (help/where [:= :id id])
                                     sql/format))
                           base-sentence)]
-      (mapper/return-value-process (db/jdbc-transaction! db-spec full-sentence)))))
+      (mapper/return-value-process (db/transact! db-spec full-sentence)))))
 
