@@ -106,6 +106,13 @@
   "Validates basic resource requirements (id and resourceType)."
   [resource resource-index]
   (cond
+    (not (map? resource))
+    (throw (ex-info "The resource must be a map."
+                    {:type :argument-validation
+                     :name :resource
+                     :expected "non-empty map"
+                     :got (-> resource type .getSimpleName)}))
+    
     (not (:id resource))
     (throw (ex-info "Invalid resource. The key :id is required."
                     (cond-> {:type :resource-validation
@@ -123,13 +130,7 @@
                              :expected "non-blank string"
                              :got "nil value"}
                       resource-index (assoc :resource-index resource-index))))
-
-    (not (map? resource))
-    (throw (ex-info "The resource must be a map."
-                    {:type :argument-validation
-                     :name :resource
-                     :expected "non-empty map"
-                     :got (-> resource type .getSimpleName)}))))
+))
 
 (defn validate-resources-basics
   "Validates basic requirements for a collection of resources."
