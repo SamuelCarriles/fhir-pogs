@@ -5,121 +5,6 @@
             [honey.sql.helpers :as help]
             [honey.sql :as sql]))
 
-(defn- validate-resource-basics
-  "Validates basic resource requirements (id and resourceType)."
-  [resource resource-index]
-  (cond
-    (not (:id resource))
-    (throw (ex-info "Invalid resource. The key :id is required."
-                    (cond-> {:type :resource-validation
-                             :param :id
-                             :value nil
-                             :expected "non-blank string"
-                             :got "nil value"}
-                      resource-index (assoc :resource-index resource-index))))
-
-    (not (:resourceType resource))
-    (throw (ex-info "Invalid resource. The key :resourceType is required."
-                    (cond-> {:type :resource-validation
-                             :param :resourceType
-                             :value nil
-                             :expected "non-blank string"
-                             :got "nil value"}
-                      resource-index (assoc :resource-index resource-index))))
-
-    (not (map? resource))
-    (throw (ex-info "The resource must be a map."
-                    {:type :argument-validation
-                     :name :resource
-                     :expected "non-empty map"
-                     :got (-> resource type .getSimpleName)}))))
-
-(defn- validate-resources-basics
-  "Validates basic requirements for a collection of resources."
-  [resources]
-  (let [resources-vec (vec resources)]
-    (doseq [[idx resource] (map-indexed vector resources-vec)]
-      (when-not (:id resource)
-        (throw (ex-info "Invalid resource. The key :id is required."
-                        {:type :resource-validation
-                         :param :id
-                         :value nil
-                         :expected "non-empty string"
-                         :got "nil value"
-                         :resource-index idx})))
-      (when-not (:resourceType resource)
-        (throw (ex-info "Invalid resource. The key :resourceType is required."
-                        {:type :resource-validation
-                         :param :resourceType
-                         :value nil
-                         :expected "non-empty string"
-                         :got "nil value"
-                         :resource-index idx}))))))
-
-(defn- validate-resources-schema
-  "Validates all resources against schema."
-  [resources]
-  (let [resources-vec (vec resources)]
-    (doseq [[idx resource] (map-indexed vector resources-vec)]
-      (when-not (v/valid-resource? resource)
-        (throw (ex-info (str "The resource at index " idx " is invalid.")
-                        (assoc {:type :schema-validation}
-                               :errors (->> resource v/validate-resource ex-data :errors))))))))
-
-(defn- validate-db-spec
-  "Validates database specification."
-  [db-spec]
-  (when-not (map? db-spec)
-    (throw (ex-info "The db-spec must be a map."
-                    {:type :argument-validation
-                     :name :db-spec
-                     :expected "non-empty map"
-                     :got (-> db-spec type .getSimpleName)}))))
-
-(defn- validate-mapping-fields-basic
-  "Basic validation for mapping-fields parameter."
-  [mapping-fields]
-  (cond
-    (not (vector? mapping-fields))
-    (throw (ex-info "The mapping-fields param must be a vector."
-                    {:type :argument-validation
-                     :name :mapping-fields
-                     :expected "non-empty vector"
-                     :got (-> mapping-fields type .getSimpleName)}))
-
-    (empty? mapping-fields)
-    (throw (ex-info "Mapping-fields param is empty."
-                    {:type :argument-validation
-                     :name :mapping-fields
-                     :expected "non-empty vector"
-                     :got (-> mapping-fields type .getSimpleName)}))))
-
-(defn- process-fields
-  "Processes mapping fields, expanding :defaults and flattening structure."
-  [mapping-fields]
-  (->> mapping-fields
-       (replace {:defaults [:meta :text]})
-       flatten
-       (reduce #(if (map? %2)
-                  (into %1 (keys %2))
-                  (conj %1 %2))
-               [])))
-
-(defn- validate-table-columns
-  "Validates that mapping fields are compatible with existing table columns."
-  [db-spec table mapping-fields]
-  (let [columns (db/get-columns db-spec table)
-        fields (process-fields mapping-fields)]
-    (when (and (seq columns)
-               (not-every? #(contains? columns %) fields))
-      (let [valid-fields (vec (remove #{:id :resourcetype} columns))]
-        (throw (ex-info (str "The table " table " already exists and you can only map these fields " valid-fields)
-                        {:type :argument-validation
-                         :name :mapping-fields
-                         :value (->> mapping-fields (replace {:defaults [:meta :text]}) flatten vec)
-                         :expected valid-fields
-                         :got "invalid fields to map"}))))))
-
 (defn- build-insert-sentences
   "Builds SQL insert sentences for a resource."
   [table-prefix fields resource]
@@ -146,8 +31,8 @@
   (save-resource! db-spec \"fhir_resources\" test-1)"
   ([db-spec ^String table-prefix resource]
    ;;Validation
-   (validate-db-spec db-spec)
-   (validate-resource-basics resource nil) 
+   (v/validate-db-spec db-spec)
+   (v/validate-resource-basics resource nil) 
    (v/validate-resource resource)
 
    ;;Operation
@@ -157,13 +42,13 @@
 
   ([db-spec ^String table-prefix mapping-fields resource]
    ;; Validation
-   (validate-db-spec db-spec)
-   (validate-mapping-fields-basic mapping-fields)
-   (validate-resource-basics resource nil)
+   (v/validate-db-spec db-spec)
+   (v/validate-mapping-fields-basic mapping-fields)
+   (v/validate-resource-basics resource nil)
 
    ;; Validate table columns if table exists
    (let [table (str table-prefix "_" (.toLowerCase (:resourceType resource)))]
-     (validate-table-columns db-spec table mapping-fields))
+     (v/validate-table-columns db-spec table mapping-fields))
 
    (v/validate-mapping-fields mapping-fields :single)
    (v/validate-resource resource)
@@ -178,7 +63,7 @@
      (mapper/return-value-process (db/transact! db-spec sentences)))))
 
 
-;; Parts of save-resources!
+;;
 
 (defn- process-single-mapping
   "Processes resources with single mapping type."
@@ -189,7 +74,7 @@
   ;; Validate table columns
   (let [first-restype (:resourceType (first resources))
         table (str table-prefix "_" (.toLowerCase first-restype))]
-    (validate-table-columns db-spec table mapping-fields))
+    (v/validate-table-columns db-spec table mapping-fields))
 
   ;; Validate all resources have same type
   (let [expected-type (:resourceType (first resources))]
@@ -234,7 +119,7 @@
                                (filter #(and (re-find (re-pattern (str table-prefix ".*")) (name %))
                                              (not (re-find #"_main$" (name %))))))]
       (doseq [table existing-tables]
-        (validate-table-columns db-spec (name table) all-fields))))
+        (v/validate-table-columns db-spec (name table) all-fields))))
 
   ;; Build and execute transaction
   (let [base-sentences [(mapper/create-table table-prefix)]
@@ -259,15 +144,15 @@
  (save-resources! db-spec \"fhir_resources_database\" :specialized {:patient [:defaults :name], :others [:defaults]} <resources>)"
   ([db-spec ^String table-prefix resources]
    ;;Validation
-   (validate-db-spec db-spec)
+   (v/validate-db-spec db-spec)
    (when-not (sequential? resources)
      (throw (ex-info "The resources param must be a coll that implements the sequential interface."
                      {:type :argument-validation
                       :name :resources
                       :expected "non-empty list, vector or seq."
                       :got (-> resources type .getSimpleName)})))
-   (validate-resources-basics resources)
-   (validate-resources-schema resources)
+   (v/validate-resources-basics resources)
+   (v/validate-resources-schema resources)
 
    ;;Operation 
    (let [base-sentences [(mapper/create-table table-prefix)]
@@ -278,15 +163,15 @@
 
   ([db-spec ^String table-prefix mapping-type mapping-fields resources]
    ;; Basic validation
-   (validate-db-spec db-spec)
+   (v/validate-db-spec db-spec)
    (when-not (sequential? resources)
      (throw (ex-info "The resources param must be a coll that implements the sequential interface."
                      {:type :argument-validation
                       :name :resources
                       :expected "non-empty list, vector or seq."
                       :got (-> resources type .getSimpleName)})))
-   (validate-resources-basics resources)
-   (validate-resources-schema resources)
+   (v/validate-resources-basics resources)
+   (v/validate-resources-schema resources)
 
    ;; Mapping type validation
    (when-not (keyword? mapping-type)
@@ -324,6 +209,8 @@
                       :expected ":single or :specialized"
                       :got mapping-type})))))
 
+;;
+
 (defn- build-search-query
   "Builds a search query for resources."
   [table-prefix restype conditions]
@@ -341,7 +228,7 @@
  - `conditions`: a vector of vectors, each one representing a condition that the resource has to meet to be returned."
   [db-spec ^String table-prefix ^String restype conditions]
   ;; Validation
-  (validate-db-spec db-spec)
+  (v/validate-db-spec db-spec)
   (when-not (vector? conditions)
     (throw (ex-info "conditions must be a vector"
                     {:type :argument-validation
@@ -369,7 +256,7 @@
 (defn delete-resources! "This function works just like `search-resources!`, except instead of returning a sequence of resources, it gives you a fully-realized result set from `next.jdbc` to confirm the operation went through."
   [db-spec ^String table-prefix ^String restype conditions]
   ;;Validation
-  (validate-db-spec db-spec)
+  (v/validate-db-spec db-spec)
   (when-not (vector? conditions)
     (throw (ex-info "conditions must be a vector"
                     {:type :argument-validation
@@ -393,7 +280,7 @@
  - `new-content`: the full resource with the updated fields."
   [db-spec ^String table-prefix ^String restype ^String id new-content]
   ;;Validation
-  (validate-db-spec db-spec)
+  (v/validate-db-spec db-spec)
 
   (when (or (not (:id new-content))
             (not (v/valid-resource? new-content)))
