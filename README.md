@@ -5,6 +5,9 @@
 [![AskDeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/SamuelCarriles/fhir-pogs)
 # FHIR POGS - PostgreSQL + FHIR + Clojure
 Clojure library to map FHIR resources to PostgreSQL and interact with them. This project adheres to the [FHIR](https://www.hl7.org/fhir/) standard for healthcare data exchage. 
+
+***Actual Release: v0.1.1***
+
 ## 🤔Why this name?
 Why "POGS" instead of just "pg" or "postgres"? What we're eliminating with this library: 
 - **S**uperfluous
@@ -192,6 +195,7 @@ To delete resources from the database, use `delete-resources!`:
 (delete-resources! db-spec "fhir_resources" "Patient" [[:= :resource_id "pat123"]])
 ```
 This function works just like `search-resources!`, except instead of returning a sequence of resources, it gives you a `fully-realized` result set from `next.jdbc` to confirm the operation went through.
+
 ## 📈Status: In Development
 This library is in active development. The **core functions** (CRUD) are ready to use. The **search** namespace is currently under development and will be included in future release. 
 
