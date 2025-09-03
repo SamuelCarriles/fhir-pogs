@@ -1,7 +1,8 @@
 (ns fhir-pogs.mapper
   (:require [cheshire.core :refer [generate-string parse-string]]
             [honey.sql :as sql]
-            [honey.sql.helpers :as help])
+            [honey.sql.helpers :as help]
+            [clojure.string :as str])
   (:import [org.postgresql.util PGobject]))
 
 (def ^:private regex-patterns
@@ -35,7 +36,7 @@
 (defn to-pg-obj
   "Create a PGobject with the given type and value."
   [^String type value]
-  {:pre [(string? type) (not (empty? type)) (some? value)]}
+  {:pre [(string? type) (not (str/blank? type)) (some? value)]}
   (doto (PGobject.)
     (.setType type)
     (.setValue (if (coll? value) (generate-string value) (str value)))))
@@ -164,8 +165,7 @@
                      (seq resource-data)
                      (conj (-> (help/insert-into resource-table)
                                (help/values [resource-data])
-                               sql/format)))]
-    (prn main-data resource-data)
+                               sql/format)))] 
     statements))
 
 ;; Improved fields-types function
