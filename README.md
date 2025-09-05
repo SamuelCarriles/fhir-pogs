@@ -3,6 +3,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.5-blue?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![License : MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![AskDeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/SamuelCarriles/fhir-pogs)
+[![Obsidian Lotus](https://img.shields.io/badge/Built%20by-Obsidian%20Lotus-black?style=flat&logo=https://raw.githubusercontent.com/obsidian-lotus/fhir-pogs/main/assets/lotus.svg)](https://github.com/obsidian-lotus)
 # FHIR POGS - PostgreSQL + FHIR + Clojure
 Clojure library to map FHIR resources to PostgreSQL and interact with them. This project adheres to the [FHIR](https://www.hl7.org/fhir/) standard for healthcare data exchage. 
 
