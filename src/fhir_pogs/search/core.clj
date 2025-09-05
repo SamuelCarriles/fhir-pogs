@@ -2,9 +2,8 @@
   (:require [clojure.string :as str]
             [honey.sql :as sql]
             [honey.sql.helpers :as h]
-            [fhir-pogs.db :as db]
-            [fhir-pogs.core :refer [search-resources!]]
-            [cheshire.core :refer [parse-string generate-string]]
+            [fhir-pogs.db :as db] 
+            [cheshire.core :refer [parse-string]]
             [fhir-search.uri-query :refer [parse]]
             [fhir-search.complex :refer [clean]]
             [fhir-pogs.search.modifiers :as modifiers]
@@ -50,11 +49,11 @@
 (defn gen-params-cond [type join params]
   (let [join (extract-join join)]
     (reduce #(let [param-data (get-param-data type (:name %2))]
-             (case (:data-type param-data)
-               :string (conj %1 (string-search-conds type (:path param-data) %2))
-               :token []
-               :date []))
-          (if (or (< 1 (count params)) (= :or join)) [join] []) params)))
+               (case (:data-type param-data)
+                 :string (conj %1 (string-search-conds type (:path param-data) %2))
+                 :token []
+                 :date []))
+            (if (or (< 1 (count params)) (= :or join)) [join] []) params)))
 
 (defn gen-cond-clauses [ast]
   (let [type (:type ast)
@@ -72,7 +71,7 @@
 (defn search-fhir! [db-spec table-prefix uri]
   (let [ast (parse uri)
         conditions (gen-cond-clauses ast)]
-    (search-resources! db-spec table-prefix (:type ast) conditions)))
+    (crud/search-resources! db-spec table-prefix (:type ast) conditions)))
 
 (comment
   ;; Esta es la forma de buscar en jsonb: [:jsonb_path_exists :content [:cast "$.**.given.**? (@ == \"Isabel\" )" :jsonpath]]
@@ -115,8 +114,9 @@
             [(extract-join join)] params))
 
   (string-search-conds (:path (get-param-data "Patient" "given")) "Patient" {:value "John"})
-(gen-cond-clauses (parse "/Patient?given=Sam,alt&family=Smith"))
- (get-param-data "Patient" "family")
+  (gen-cond-clauses (parse "/Patient?given=Sam,alt&family=Smith"))
+  (get-param-data "Patient" "family")
   :.)
+
 
 
