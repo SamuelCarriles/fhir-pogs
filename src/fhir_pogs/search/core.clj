@@ -20,8 +20,7 @@
         path (when res (->> (str/split (get-in res [:resource :expression]) #" \| ")
                             (map #(re-find (re-pattern (str "(?<=" restype "\\.).*")) %))
                             (remove nil?)
-                            first
-                            parse-where))
+                            (reduce #(conj %1 (parse-where %2)) [])))
         type (get-in res [:resource :type])]
     (when res {:search-param param
                :path path
@@ -35,10 +34,27 @@
          (mapcat :resource)
          (filter #(= (:code %) type))
          (mapcat :param)
-         (map #(str % ".reference")))))
+         (mapv #(str % ".reference")))))
 
-(defn gen-params-cond [type join params])
+(defn extract-join [join]
+  (when (keyword? join) (-> join name keyword)))
 
+(defn string-search-conds  [type path param]
+  (let [join (-> (:join param) extract-join)
+        base (if join [join] [])]
+    (if-let [params (:params param)]
+      (reduce #(->> (modifiers/get-string-data-cond path (:modifier %2) (:value %2))
+                    (conj %1)) base params)
+      (modifiers/get-string-data-cond path (:modifier param) (:value param)))))
+
+(defn gen-params-cond [type join params]
+  (let [join (extract-join join)]
+    (reduce #(let [param-data (get-param-data type (:name %2))]
+             (case (:data-type param-data)
+               :string (conj %1 (string-search-conds type (:path param-data) %2))
+               :token []
+               :date []))
+          (if (or (< 1 (count params)) (= :or join)) [join] []) params)))
 
 (defn gen-cond-clauses [ast]
   (let [type (:type ast)
@@ -46,11 +62,11 @@
         join (:join ast)
         params (:params ast)
         compartment (:compartment ast)
-        compartment-cond (jsonb-paths-exists
+        compartment-cond (modifiers/jsonb-path-exists
                           (compartment-paths type compartment)
                           (str " ? (@ == \"" (:type compartment) "/" (:id compartment) "\")"))
         params-cond (gen-params-cond type join params)]
-    (-> (conj [[:= :resourceType type]] (when id [:= :resource-id id]) compartment-cond params-cond)
+    (-> (conj [:and [:= :resourceType type]] (when id [:= :resource-id id]) compartment-cond params-cond)
         clean)))
 
 (defn search-fhir! [db-spec table-prefix uri]
@@ -98,27 +114,9 @@
                  :date []))
             [(extract-join join)] params))
 
-  (defn extract-join [join]
-    (when (keyword? join) (-> join name keyword)))
-
-
-  [{:name "given"
-    :join :or
-    :params [{:modifier :fhir.search.modier/exact
-              :value "John"}
-             {:modifier :fhir.search.modier/exact
-              :value "Sam"}]}]
-
-
-  (defn string-search-conds  [path type param]
-    (let [join (:join param)
-          base (if join [(extract-join join)] [])]
-      (if-not (:params param)
-        (modifiers/get-string-data-cond path (:modifier param) (:value param))
-        base)))
-
-  (string-search-conds (:path (get-param-data "Patient" "given")) "Patient" {:modifier :missing :value "true"})
-  
+  (string-search-conds (:path (get-param-data "Patient" "given")) "Patient" {:value "John"})
+(gen-cond-clauses (parse "/Patient?given=Sam,alt&family=Smith"))
+ (get-param-data "Patient" "family")
   :.)
 
 
