@@ -221,7 +221,7 @@
      :main main
      :conditions all-cond}))
 
-(defn search-resources! "Return a coll of the resources found.\n This function takes four arguments:
+(defn search-resources "Return a coll of the resources found.\n This function takes four arguments:
  - `db-spec`: the database config where the search will happen.
  - `table-prefix`: the prefix used for the tables you're working with.
  - `restype`: the type of resource you're looking for.
@@ -264,7 +264,7 @@
                      :expected "non-empty vector"
                      :got (-> conditions type .getSimpleName)})))
   
-  (when (seq (search-resources! db-spec table-prefix restype conditions))
+  (when (seq (search-resources db-spec table-prefix restype conditions))
     (let [table (keyword (str table-prefix "_main"))
           all-cond (into [:and [:= :resourcetype restype]] conditions)
           sentence (-> (help/delete-from table)
@@ -297,7 +297,7 @@
                                  ":resourceType"
                                  ":id"))})))
   
-  (when (seq (search-resources! db-spec table-prefix restype [[:= :resource_id id] [:= :resourceType restype]]))
+  (when (seq (search-resources db-spec table-prefix restype [[:= :resource_id id] [:= :resourceType restype]]))
     (let [main (keyword (str table-prefix "_main"))
           table (keyword (str table-prefix "_" (.toLowerCase restype)))
           columns (remove #{:resourcetype :id} (db/get-columns db-spec (name table)))
