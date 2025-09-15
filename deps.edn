@@ -1,20 +1,20 @@
-{:paths ["src"]
- :deps {org.clojure/clojure {:mvn/version "1.12.1"}
-        cheshire/cheshire {:mvn/version "6.0.0"}
-        com.github.seancorfield/honeysql {:mvn/version "2.7.1310"}
-        com.github.seancorfield/next.jdbc {:mvn/version "1.3.1048"}
-        org.postgresql/postgresql {:mvn/version "42.7.7"}
-        luposlip/json-schema {:mvn/version "0.4.6"} 
-        clj-http/clj-http {:mvn/version "3.13.1"}
-        com.github.guijealth/fhir-search {:git/sha "9400b4f715577f3216a9289cd972290324cd51ec"}}
- :aliases {:test {:extra-paths ["dev" "test"]
-                  :main-opts ["-m" "test-runner"]}
-           :dev {:extra-deps {nrepl/nrepl {:mvn/version,"1.3.1"}
-                              cider/cider-nrepl {:mvn/version,"0.55.4"}}
-                 :main-opts ["-m" "nrepl.cmdline" "--middleware" "[cider.nrepl/cider-middleware]"]}}
+{:paths ["src"] 
  :name "fhir-pogs" 
  :version "0.1.1"
  :description "Clojure library to map FHIR resources to PostgreSQL and interact with them."
  :license {:name "MIT"
            :url "https://opensource.org/license/MIT"}
- :homepage "https://github.com/obsidian-lotus/fhir-pogs"}
+ :homepage "https://github.com/obsidian-lotus/fhir-pogs"
+ :deps {org.clojure/clojure {:mvn/version "1.12.1"}
+        cheshire/cheshire {:mvn/version "6.0.0"}
+        com.github.seancorfield/honeysql {:mvn/version "2.7.1310"}
+        com.github.seancorfield/next.jdbc {:mvn/version "1.3.1048"}
+        org.postgresql/postgresql {:mvn/version "42.7.7"}
+        luposlip/json-schema {:mvn/version "0.4.6"}
+        clj-http/clj-http {:mvn/version "3.13.1"}
+        com.github.guijealth/fhir-search {:git/sha "c5e597b2d45c6a253f37be18728986f0375f1c72"}}
+ :aliases {:test {:extra-paths ["dev" "test"]
+                  :main-opts ["-m" "test-runner"]}
+           :dev {:extra-deps {nrepl/nrepl {:mvn/version,"1.3.1"}
+                              cider/cider-nrepl {:mvn/version,"0.55.4"}}
+                 :main-opts ["-m" "nrepl.cmdline" "--middleware" "[cider.nrepl/cider-middleware]"]}}}
