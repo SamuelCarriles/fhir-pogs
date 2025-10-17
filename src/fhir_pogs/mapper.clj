@@ -89,16 +89,15 @@
 
       :else [:text v])))
 
-
 (defn create-table
   "Returns an SQL statement to create a table with the specified fields."
   ([^String table-prefix]
    (-> (help/create-table (keyword (str table-prefix "_main")) :if-not-exists)
-       (help/with-columns [[:resource-id :text [:not nil]]
+       (help/with-columns [[:resource_id :text [:not nil]]
                            [:resourceType :text [:not nil]]
                            [:content :jsonb [:not nil]]
-                           [[:primary-key :resource-id :resourceType]]])
-       sql/format))
+                           [[:primary-key :resource_id :resourceType]]])
+       (sql/format {:quoted true})))
 
   ([^String table-prefix ^String restype fields]
    (let [base-columns [[:id :text [:not nil]]
@@ -106,12 +105,14 @@
          field-columns (mapv (fn [[field type]] [field type]) fields)
          constraints [[[:primary-key :id :resourceType]]
                       [[:foreign-key :id :resourceType]
-                       [:references (keyword (str table-prefix "_main")) :resource-id :resourceType]
+                       [:references (keyword (str table-prefix "_main")) :resource_id :resourceType]
                        :on-delete-cascade]]
          all-columns (concat base-columns field-columns constraints)]
-     (-> (help/create-table (keyword (str table-prefix "_" restype)) :if-not-exists)
+     (-> (help/create-table (keyword (str table-prefix "_" (.toLowerCase restype))) :if-not-exists)
          (help/with-columns all-columns)
-         sql/format))))
+         (sql/format {:quoted true})))))
+
+
 
 (defn template
   "Creates a map template for database insertion from FHIR resource."
@@ -136,7 +137,7 @@
   [template ^String restype]
   (let [{:keys [table fields]} template
         main-table (keyword (str table "_main"))
-        resource-table (keyword (str table "_" restype))
+        resource-table (keyword (str table "_" (.toLowerCase restype)))
 
         ;; Separate fields by destination table
         {main-fields true resource-fields false}
@@ -144,14 +145,14 @@
 
         ;; Process main table fields
         main-data (reduce (fn [acc {:keys [name value]}]
-                            (assoc acc (if (= name :id) :resource-id name) value))
+                            (assoc acc (if (= name :id) :resource_id name) value))
                           {} main-fields)
 
         ;; Process resource table fields (if any non-main fields exist)
         resource-data (when (> (count fields) 3) ; More than id, resourceType, content
                         (reduce (fn [acc {:keys [name value]}]
                                   (assoc acc name value))
-                                {:id (:resource-id main-data)} ; Include id reference
+                                {:id (:resource_id main-data)} ; Include id reference
                                 resource-fields))
 
         ;; Generate SQL statements
@@ -160,13 +161,14 @@
                      (conj (-> (help/insert-into main-table)
                                (help/values [main-data])
                                (help/returning :content)
-                               sql/format))
+                               (sql/format {:quoted true})))
 
                      (seq resource-data)
                      (conj (-> (help/insert-into resource-table)
                                (help/values [resource-data])
-                               sql/format)))] 
+                               (sql/format {:quoted true}))))] 
     statements))
+
 
 ;; Improved fields-types function
 (defn fields-types

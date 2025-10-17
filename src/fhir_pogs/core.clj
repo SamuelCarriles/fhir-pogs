@@ -32,7 +32,7 @@
   ([db-spec ^String table-prefix resource]
    ;;Validation
    (v/validate-db-spec db-spec)
-   (v/validate-resource-basics resource nil) 
+   (v/validate-resource-basics resource nil)
    (v/validate-resource resource)
 
    ;;Operation
@@ -58,8 +58,8 @@
          base [(mapper/create-table table-prefix)]
          create-specific (when (some #(get resource %) (keys fields))
                            [(mapper/create-table table-prefix restype fields)])
-         sentences (-> (concat base create-specific)
-                       (into (build-insert-sentences table-prefix (keys fields) resource)))]
+         sentences (->> (build-insert-sentences table-prefix fields resource)
+                        (concat base create-specific))] 
      (mapper/return-value-process (db/transact! db-spec sentences)))))
 
 
@@ -93,7 +93,7 @@
         create-specific (when (some (fn [r] (some #(get r %) (keys fields))) resources)
                           [(mapper/create-table table-prefix (:resourceType (first resources)) fields)])
         insert-sentences (mapcat (fn [resource]
-                                   (build-insert-sentences table-prefix (keys fields) resource))
+                                   (build-insert-sentences table-prefix fields resource))
                                  resources)]
     (->> (concat base-sentences create-specific insert-sentences)
          (db/transact! db-spec)
@@ -131,7 +131,7 @@
                                            create-specific (when (some #(get resource %) (keys fields))
                                                              [(mapper/create-table table-prefix restype fields)])]
                                        (concat create-specific
-                                               (build-insert-sentences table-prefix (keys fields) resource))))
+                                               (build-insert-sentences table-prefix fields resource))))
                                    resources)]
     (->> (concat base-sentences resource-sentences)
          (db/transact! db-spec)
@@ -191,7 +191,7 @@
                           :expected "non-empty vector"
                           :got (-> mapping-fields type .getSimpleName)})))
        (process-single-mapping db-spec table-prefix mapping-fields resources))
-   
+
      :specialized
      (do
        (when-not (map? mapping-fields)
@@ -201,7 +201,7 @@
                           :expected "non-empty map"
                           :got (-> mapping-fields type .getSimpleName)})))
        (process-specialized-mapping db-spec table-prefix mapping-fields resources))
-   
+
      ;; Invalid mapping type
      (throw (ex-info "The mapping-type given is invalid. Use :single or :specialized."
                      {:type :argument-validation
@@ -235,7 +235,7 @@
                      :name :conditions
                      :expected "non-empty vector"
                      :got (-> conditions type .getSimpleName)})))
-  
+
   (let [{:keys [table main conditions]} (build-search-query table-prefix restype conditions)
         query (if (contains? (db/get-tables db-spec) table)
                 (-> (help/select :content)
@@ -247,7 +247,7 @@
                     (help/from [main :m])
                     (help/where conditions)
                     sql/format))]
-  
+
     ;; Execute and process results
     (->> (db/execute! db-spec query)
          (mapcat vals)
@@ -263,7 +263,7 @@
                      :name :conditions
                      :expected "non-empty vector"
                      :got (-> conditions type .getSimpleName)})))
-  
+
   (when (seq (search-resources db-spec table-prefix restype conditions))
     (let [table (keyword (str table-prefix "_main"))
           all-cond (into [:and [:= :resourcetype restype]] conditions)
@@ -296,23 +296,23 @@
                                (if (not= restype (:resourceType new-content))
                                  ":resourceType"
                                  ":id"))})))
-  
+
   (when (seq (search-resources db-spec table-prefix restype [[:= :resource_id id] [:= :resourceType restype]]))
     (let [main (keyword (str table-prefix "_main"))
           table (keyword (str table-prefix "_" (.toLowerCase restype)))
           columns (remove #{:resourcetype :id} (db/get-columns db-spec (name table)))
           base-sentence (-> (help/update main)
-                             (help/set {:content (mapper/to-pg-obj "jsonb" new-content)})
-                             (help/where [:= :resource_id id])
-                             (help/returning :content)
-                             sql/format)
+                            (help/set {:content (mapper/to-pg-obj "jsonb" new-content)})
+                            (help/where [:= :resource_id id])
+                            (help/returning :content)
+                            sql/format)
           full-sentence (if (seq columns)
                           [base-sentence
-                                (-> (help/update table)
-                                    (help/set (reduce #(assoc %1 %2 (second (mapper/type-of (get new-content %2))))
-                                                      {} columns))
-                                    (help/where [:= :id id])
-                                    sql/format)]
+                           (-> (help/update table)
+                               (help/set (reduce #(assoc %1 %2 (second (mapper/type-of (get new-content %2))))
+                                                 {} columns))
+                               (help/where [:= :id id])
+                               sql/format)]
                           [base-sentence])]
       (mapper/return-value-process (db/transact! db-spec full-sentence)))))
 

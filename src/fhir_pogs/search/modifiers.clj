@@ -49,5 +49,21 @@
 
 (comment
 
+  (defn jsonb-path-exists
+    ([path]
+     (let [conds (reduce
+                  #(conj %1
+                         [:jsonb_path_exists :content [:cast (str "$." %2 ".** ") :jsonpath]])
+                  [] path)]
+       (if (> (count path) 1) (vec (conj conds :or)) (first conds))))
+    ([path comp]
+     (when-not (or (nil? path) (not (seq path)) (nil? comp) (not (string? comp)))
+       (let [path (if (coll? path) path (vector path))
+             conds (reduce
+                    #(conj %1
+                           [:jsonb_path_exists :content [:cast (str "$." %2 ".** " (when-not (str/blank? comp) "?") comp) :jsonpath]])
+                    [] path)]
+         (if (> (count path) 1) (vec (conj conds :or)) (first conds))))))
+
   :.)
 
