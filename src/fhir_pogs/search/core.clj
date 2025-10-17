@@ -4,7 +4,7 @@
             [honey.sql.helpers :as h]
             [fhir-pogs.db :as db] 
             [cheshire.core :refer [parse-string]]
-            [fhir-search.uri-query :refer [parse]]
+            [fhir-search.uri-query :refer [parse]] 
             [fhir-search.complex :refer [clean]]
             [fhir-pogs.search.modifiers :as modifiers]
             [fhir-pogs.core :as crud]))
@@ -19,10 +19,10 @@
         path (when res (->> (str/split (get-in res [:resource :expression]) #" \| ")
                             (map #(re-find (re-pattern (str "(?<=" restype "\\.).*")) %))
                             (remove nil?)
-                            (reduce #(conj %1 (parse-where %2)) [])))
+                            (mapv #(parse-where %))))
         type (get-in res [:resource :type])]
     (when res {:search-param param
-               :path path
+               :paths path
                :data-type (keyword type)})))
 
 (defn compartment-paths [type compartment]
@@ -68,35 +68,23 @@
     (-> (conj [:and [:= :resourceType type]] (when id [:= :resource-id id]) compartment-cond params-cond)
         clean)))
 
-(defn search-fhir! [db-spec table-prefix uri]
+(defn fhir-search [db-spec table-prefix uri]
   (let [ast (parse uri)
         conditions (gen-cond-clauses ast)]
-    (crud/search-resources! db-spec table-prefix (:type ast) conditions)))
+    (crud/search-resources db-spec table-prefix (:type ast) conditions)))
 
 (comment
   ;; Esta es la forma de buscar en jsonb: [:jsonb_path_exists :content [:cast "$.**.given.**? (@ == \"Isabel\" )" :jsonpath]]
-
+  
   ;;Tenemos que saber que las clausulas condicionales van a tener este formato:
   ;; [:operador :campo :valor]
-
+  
   (def db-spec {:dbtype "postgresql"
                 :dbname "resources"
                 :host "localhost"
                 :user "postgres"
                 :port "5432"
-                :password "postgres"})
-
-  {:type "Patient"
-   :join :fhir.search.join/and
-   :params [{:name "family"
-             :join :fhir.search.join/or
-             :params [{:value "Doe"}
-                      {:value "Carriles"}]}
-            {:name "given"
-             :join :fhir.search.join/or
-             :params [{:value "Jhon"}
-                      {:value "Sam"}]}]}
-
+                :password "postgres"}) 
 
 
   (let [ast {:type "Patient"
@@ -113,10 +101,33 @@
                  :date []))
             [(extract-join join)] params))
 
-  (string-search-conds (:path (get-param-data "Patient" "given")) "Patient" {:value "John"})
+  (string-search-conds "Patient" (:path (get-param-data "Patient" "given")) {:value "John"})
   (gen-cond-clauses (parse "/Patient?given=Sam,alt&family=Smith"))
   (get-param-data "Patient" "family")
-  :.)
+  
+  (def resource1 {:resourceType "Condition"
+                  :id "example1"
+                  :clinicalStatus {:coding [{:system "http://terminology.hl7.org/CodeSystem/condition-clinical"
+                                             :code "active"}]}
+                  :verificationStatus {:coding [{:system "http://terminology.hl7.org/CodeSystem/condition-ver-status"
+                                                 :code "confirmed"}]}
+                  :category [{:coding [{:system "http://terminology.hl7.org/CodeSystem/condition-category"
+                                        :code "encounter-diagnosis"}]}]
+                  :code {:coding [{:system "http://snomed.info/sct"
+                                   :code "39065001"
+                                   :display "Burn of ear"}]}
+                  :subject {:reference "Patient/example"}
+                  :onsetDateTime "2012-05-24"})
+
+  
+  (try 
+    (fhir-pogs.core/save-resource! db-spec "fhir" [:verificationStatus] resource1)
+    (catch Exception e 
+      (ex-data e)))
+  
+  
+  :.
+  )
 
 
 
