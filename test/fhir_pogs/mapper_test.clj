@@ -1,5 +1,6 @@
 (ns fhir-pogs.mapper-test
    (:require [clojure.test :refer [deftest is testing run-tests]]
+             [clojure.string :as str]
              [fhir-pogs.mapper :as mapper]
              [cheshire.core :as json])
    (:import [org.postgresql.util PGobject]))
@@ -169,7 +170,7 @@
      (let [result (mapper/create-table "fhir_resources" "Patient" {:birthDate :date :gender :text})]
        (is (vector? result))
        (is (string? (first result)))
-       (is (.contains (first result) "fhir_resources_Patient"))
+       (is (.contains (first result) "fhir_resources_patient"))
        (is (.contains (first result) "birthDate"))
        (is (.contains (first result) "gender")))))
 
@@ -214,10 +215,11 @@
 
    (testing "Resource table created when extra fields present"
      (let [template (mapper/template "fhir_resources" [:birthDate :gender :active] sample-patient)
-           statements (mapper/insert-to-sentence template "Patient")]
-       (is (>= (count statements) 1))
-      ; Should have both main and resource table inserts when there are extra fields
-       (is (some #(.contains (first %) "Patient") statements)))))
+           statements (mapper/insert-to-sentence template "Patient")
+           sql-strings (map first statements)]
+       (is (>= (count statements) 2)) ; Debe haber al menos 2: main + patient table
+       (is (some #(str/includes? % "fhir_resources_patient") sql-strings))
+       (is (some #(str/includes? % "fhir_resources_main") sql-strings)))))
 
  ;; Tests para fields-types
  (deftest test-fields-types
