@@ -216,7 +216,7 @@
   [table-prefix restype conditions]
   (let [table (keyword (str table-prefix "_" (.toLowerCase restype)))
         main (keyword (str table-prefix "_main"))
-        all-cond (into [:and [:= (keyword "m.resourcetype") restype]] conditions)]
+        all-cond (into [:and [:= (keyword "m.resourceType") restype]] conditions)]
     {:table table
      :main main
      :conditions all-cond}))
@@ -240,13 +240,13 @@
         query (if (contains? (db/get-tables db-spec) table)
                 (-> (help/select :content)
                     (help/from [main :m])
-                    (help/join table [:= :resource-id :id])
+                    (help/join table [:= :resource_id :id])
                     (help/where conditions)
-                    sql/format)
+                    (sql/format {:quoted true}))
                 (-> (help/select :content)
                     (help/from [main :m])
                     (help/where conditions)
-                    sql/format))]
+                    (sql/format {:quoted true})))]
 
     ;; Execute and process results
     (->> (db/execute! db-spec query)

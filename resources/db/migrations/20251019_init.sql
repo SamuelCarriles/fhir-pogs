@@ -15,7 +15,6 @@ INSERT INTO fhir_search_functions (search_type, modifier, handler_function, desc
 ('token', 'in', 'token_search_in', 'Test if the coded value is in a ValueSet'),
 ('token', 'not-in', 'token_search_not_in', 'Test if the coded value is NOT in a ValueSet'),
 ('token', 'of-type', 'token_search_of_type', 'Search for identifiers of a specific type'),
-('token', 'identifier', 'token_search_identifier', 'Search by identifier rather than literal reference'),
 ('token', 'code-text', 'token_search_code_text', 'Case-insensitive match on code values as strings'),
 ('token', 'missing', 'token_search_missing', 'Search for resources where the parameter is missing or present');
 
@@ -98,10 +97,59 @@ AS $$
 DECLARE
   json_path text;
 BEGIN
-  json_path:= format('$.%s.* ? (@.display like_regex "%s" flag "i" || @.text like_regex "%s" flag "i")', path, token, token);
+  json_path:= format('$.%s.** ? ((exists(@.display) && @.display like_regex "%s" flag "i")|| (exists(@.text) && @.text like_regex "%s" flag "i"))', path, token, token);
   RETURN jsonb_path_exists(doc, json_path::jsonpath);
 END
 $$;
+
+CREATE OR REPLACE FUNCTION token_search_code_text(
+  doc jsonb,
+  path text,
+  token text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  json_path text;
+BEGIN
+  json_path:= format('$.%s.** ? (exists(@.code) && @.code like_regex "%s" flag "i")', path, token);
+  RETURN jsonb_path_exists(doc, json_path::jsonpath);
+END
+$$;
+
+CREATE OR REPLACE FUNCTION token_search_of_type(
+  doc jsonb,
+  path text,
+  token text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  json_path text;
+  system text;
+  code text;
+  value text;
+BEGIN
+  system := split_part(token, '|', 1);
+  code := split_part(token, '|', 2);
+  value := split_part(token, '|', 3);
+  
+  IF system <> '' AND code <> '' AND value <> '' THEN
+    json_path := format('$.%s ? (exists(@.type.coding[*] ? (@.system == "%s" && @.code == "%s")) && @.value == "%s")', 
+                        path, system, code, value);
+  ELSIF code <> '' AND value <> '' THEN
+    json_path := format('$.%s ? (exists(@.type.coding[*] ? (@.code == "%s")) && @.value == "%s")', 
+                        path, code, value);
+  ELSE
+    RAISE EXCEPTION 'Invalid :of-type format. Expected: system|code|value or |code|value';
+  END IF;
+  RETURN jsonb_path_exists(doc, json_path::jsonpath);
+END
+$$;  
 
 CREATE OR REPLACE FUNCTION fhir_token_search(
     doc jsonb,
@@ -117,11 +165,14 @@ DECLARE
   handler_name text;
   result boolean;
 BEGIN
+  IF token = '' OR token IS NULL THEN
+    RAISE EXCEPTION 'Search parameter value cannot be empty';
+  END IF;
   SELECT handler_function INTO handler_name FROM fhir_search_functions
   WHERE search_type = 'token' AND fhir_search_functions.modifier = fhir_token_search.modifier;
   IF handler_name IS NULL THEN
     RAISE EXCEPTION 'Unsupported modifier "%" for token search', modifier;
-  END IF
+  END IF;
   EXECUTE format('SELECT %I($1, $2, $3)', handler_name) 
   INTO result
   USING doc, path, token;

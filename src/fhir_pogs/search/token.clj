@@ -1,11 +1,31 @@
 (ns fhir-pogs.search.token
   (:require [fhir-pogs.search.param-data :as param]
-            [fhir-pogs.db :as db]
-            [honey.sql :as sql]
-            [honey.sql.helpers :as h]
-            [fhir-search.uri-query :refer [parse]]
-            [fhir-search.complex :refer [clean]]
+            [fhir-pogs.db :as db] 
             [clojure.string :as str]))
+
+(defn process-param [columns restype paths param]
+  (let [{search-param :name :keys [modifier value params]} param
+        mod (or (when modifier (-> modifier name)) "base")]
+    (into [] (if (some #(= (name %) search-param) columns)
+               (let [locations (map #(let [[column path] (str/split % #"\." 2)]
+                                       {:column (keyword column)
+                                        :path (or path column)}) paths)]
+                 (mapcat (fn [{:keys [column path]}]
+                           (if-not params
+                             [[:'fhir_token_search column path value mod]]
+                             (map #(process-param columns restype paths %) params))) locations))
+               ;;
+               (mapcat (fn [path]
+                         (if-not params
+                           [[:'fhir_token_search :content path value mod]]
+                           (map #(process-param columns restype paths %) params))) paths)))))
+
+(defn token-search-conds [db-spec table-prefix restype params]
+  (let [columns (db/get-columns db-spec (str table-prefix "_" (str/lower-case restype)))
+        conditions (mapcat (fn [{:keys [name] :as param}]
+                             (let [paths (:paths (param/get-data restype name))]
+                               (process-param columns restype paths param))) params)] 
+    (if (> (count conditions) 1) (into [:or] cat conditions) (first conditions))))
 
 (comment
   (def db-spec {:dbtype "postgresql"
@@ -15,35 +35,8 @@
                 :port "5432"
                 :password "postgres"})
 
-  (defn process-param [path {:keys [name join params modifier value]}])
-
-  (defn token-search [db-spec table-prefix {:keys [type params]}]
-    (let [table (str table-prefix "_" (str/lower-case type))
-          columns (db/get-columns db-spec table)]
-      (reduce (fn [acc curr]
-                (let [{:keys [paths]} (param/get-data type (:name curr))
-                      set-paths (->> paths
-                                       (map #(-> (str/split % #"\." 2) first))
-                                       set)]
-                  (if (some columns set-paths)
-                    ) ))
-              [] params)))
-
-
-
-  (let [table-prefix "fhir"
-        restype "Patient"
-        search-param "active"]
-    (some #(= (name %) search-param) (db/get-columns db-spec (str table-prefix "_" (.toLowerCase restype)))))
-
-
-  (filter #(and (str/includes? % "fhir")
-                (some (fn [x] (= (name x) "activ")) (db/get-columns db-spec %))) (db/get-tables db-spec))
-
-  ;; Si el filtro no da seq, hay que buscar en la main table, en content
-  {:type "Patient"
-   :join :fhir.search.join/and
-   :params [{:name "active"
-             :value "true"}]}
-
-  :.)
+  ;; Si la columna está, se splitea el primer valor del path y luego se aplica la función correspondiente 
+  ;; en esa columna 
+  
+  :.
+  )
