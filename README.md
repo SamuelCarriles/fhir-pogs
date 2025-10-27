@@ -202,7 +202,7 @@ This library is in active development. The **core functions** (CRUD) are ready t
 
 ## ✴️Coming Soon      
 - [ ] Build the necessary tools in `fhir-pogs.search` to transform an AST tree produced by a FHIR search query into condition clauses usable by `fhir-pogs.core/search-resources!`.
-  - [X] Support **token search** with commons modifiers: not, missing, text, code-text, of-type. 
+  - [X] Support **token search** with commons modifiers: not, missing, text, of-type. 
   - [ ] Support **string search**: names, text fields (family, given, address.city)
     - [ ] Support :exact, :contains, :missing modifiers
 - [ ] Define `fhir-pogs.search/format` to format search results in compliance with FHIR search standards.

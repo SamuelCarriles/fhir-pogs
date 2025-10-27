@@ -15,7 +15,6 @@ INSERT INTO fhir_search_functions (search_type, modifier, handler_function, desc
 ('token', 'in', 'token_search_in', 'Test if the coded value is in a ValueSet'),
 ('token', 'not-in', 'token_search_not_in', 'Test if the coded value is NOT in a ValueSet'),
 ('token', 'of-type', 'token_search_of_type', 'Search for identifiers of a specific type'),
-('token', 'code-text', 'token_search_code_text', 'Case-insensitive match on code values as strings'),
 ('token', 'missing', 'token_search_missing', 'Search for resources where the parameter is missing or present');
 
 CREATE OR REPLACE FUNCTION token_search_base(
@@ -98,23 +97,6 @@ DECLARE
   json_path text;
 BEGIN
   json_path:= format('$.%s.** ? ((exists(@.display) && @.display like_regex "%s" flag "i")|| (exists(@.text) && @.text like_regex "%s" flag "i"))', path, token, token);
-  RETURN jsonb_path_exists(doc, json_path::jsonpath);
-END
-$$;
-
-CREATE OR REPLACE FUNCTION token_search_code_text(
-  doc jsonb,
-  path text,
-  token text
-)
-RETURNS boolean
-LANGUAGE plpgsql
-IMMUTABLE
-AS $$
-DECLARE
-  json_path text;
-BEGIN
-  json_path:= format('$.%s.** ? (exists(@.code) && @.code like_regex "%s" flag "i")', path, token);
   RETURN jsonb_path_exists(doc, json_path::jsonpath);
 END
 $$;
