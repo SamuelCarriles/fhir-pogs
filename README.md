@@ -81,13 +81,13 @@ The resulting tables from the previous example are as follows:
 ---
 *fhir_resources_main*
 
-|resource_id|resourcetype|content|
+|resource_id|resourceType|content|
 |:-:|:----------:|:-----:|
 |example|Patient|{"id" : "example"...}|
 ---
 *fhir_resources_patient*
 
-|id|resourcetype|text|
+|id|resourceType|text|
 |:---------:|:--:|:--:|
 |example|Patient|{"status" : "generated"...}|
 ---
@@ -133,9 +133,9 @@ For this function, the arguments change slightly:
 > *A separate table is generated for each different resource type. This ensures that resources of the same type are stored together in the same table.* 
 
 ## 🛠️Basic Operations: Read/Search Resources
-To look up a resource —or a bunch of them— that match certain criteria, you’ll want to use the `search-resources!` function. Here's a quick example:
+To look up a resource —or a bunch of them— that match certain criteria, you’ll want to use the `search-resources` function. Here's a quick example:
 ```clojure
-(:require [fhir-pogs.core :refer [search-resources!]])
+(:require [fhir-pogs.core :refer [search-resources]])
 
 (def db-spec {:dbtype "postgresql"
               :dbname "resources"
@@ -144,7 +144,7 @@ To look up a resource —or a bunch of them— that match certain criteria, you�
               :password "postgres"
               :port "5432"})
 
-(search-resources! db-spec "fhir_resources" "Patient" [:= :resource_id "pat123"])
+(search-resources db-spec "fhir_resources" "Patient" [:= :resource_id "pat123"])
 ;;=>({:id "pat123", :name [{:given ["Sam"], :family "Altman"}], :resourceType "Patient"})
 ```
 This function takes four arguments:
@@ -195,13 +195,14 @@ To delete resources from the database, use `delete-resources!`:
               :port "5432"})
 (delete-resources! db-spec "fhir_resources" "Patient" [[:= :resource_id "pat123"]])
 ```
-This function works just like `search-resources!`, except instead of returning a sequence of resources, it gives you a `fully-realized` result set from `next.jdbc` to confirm the operation went through.
+This function works just like `search-resources`, except instead of returning a sequence of resources, it gives you a `fully-realized` result set from `next.jdbc` to confirm the operation went through.
 
 ## 📈Status: In Development
 This library is in active development. The **core functions** (CRUD) are ready to use. The **search** namespace is currently under development and will be included in future release. 
 
 ## ✴️Coming Soon      
 - [ ] Build the necessary tools in `fhir-pogs.search` to transform an AST tree produced by a FHIR search query into condition clauses usable by `fhir-pogs.core/search-resources!`.
+  - [X] Support **token search** with commons modifiers: not, missing, text, code-text, of-type. 
   - [ ] Support **string search**: names, text fields (family, given, address.city)
     - [ ] Support :exact, :contains, :missing modifiers
 - [ ] Define `fhir-pogs.search/format` to format search results in compliance with FHIR search standards.
