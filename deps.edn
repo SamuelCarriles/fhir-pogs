@@ -12,6 +12,7 @@
         org.postgresql/postgresql {:mvn/version "42.7.7"}
         luposlip/json-schema {:mvn/version "0.4.6"}
         clj-http/clj-http {:mvn/version "3.13.1"}
+        migratus/migratus {:mvn/version "1.6.4"}
         com.github.guijealth/fhir-search {:git/sha "9d15964fa70f2ae5dd58d531acd5662547caa8dd"}}
  :aliases {:test {:extra-paths ["test"]
                   :extra-deps {io.github.cognitect-labs/test-runner

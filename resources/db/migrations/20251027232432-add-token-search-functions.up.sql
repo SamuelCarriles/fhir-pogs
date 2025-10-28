@@ -5,7 +5,7 @@ CREATE TABLE fhir_search_functions (
   description TEXT,
   PRIMARY KEY(search_type, modifier)
 );
-
+--;;
 INSERT INTO fhir_search_functions (search_type, modifier, handler_function, description) VALUES
 ('token', 'base', 'token_search_base', 'FHIR token search without modifiers'),
 ('token', 'text', 'token_search_text', 'Search on the text/display of the token'),
@@ -16,7 +16,7 @@ INSERT INTO fhir_search_functions (search_type, modifier, handler_function, desc
 ('token', 'not-in', 'token_search_not_in', 'Test if the coded value is NOT in a ValueSet'),
 ('token', 'of-type', 'token_search_of_type', 'Search for identifiers of a specific type'),
 ('token', 'missing', 'token_search_missing', 'Search for resources where the parameter is missing or present');
-
+--;;
 CREATE OR REPLACE FUNCTION token_search_base(
     doc jsonb,
     path text,
@@ -48,7 +48,7 @@ BEGIN
     RETURN jsonb_path_exists(doc, json_path::jsonpath);
 END
 $$;
-
+--;;
 CREATE OR REPLACE FUNCTION token_search_not(
     doc jsonb,
     path text,
@@ -62,7 +62,7 @@ BEGIN
   RETURN NOT token_search_base(doc, path, token);
 END
 $$;
-
+--;;
 CREATE OR REPLACE FUNCTION token_search_missing(
   doc jsonb,
   path text,
@@ -83,7 +83,7 @@ BEGIN
   END IF;
 END
 $$;
-
+--;;
 CREATE OR REPLACE FUNCTION token_search_text(
   doc jsonb,
   path text,
@@ -100,7 +100,7 @@ BEGIN
   RETURN jsonb_path_exists(doc, json_path::jsonpath);
 END
 $$;
-
+--;;
 CREATE OR REPLACE FUNCTION token_search_of_type(
   doc jsonb,
   path text,
@@ -132,7 +132,7 @@ BEGIN
   RETURN jsonb_path_exists(doc, json_path::jsonpath);
 END
 $$;  
-
+--;;
 CREATE OR REPLACE FUNCTION fhir_token_search(
     doc jsonb,
     path text,
