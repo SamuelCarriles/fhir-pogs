@@ -1,7 +1,8 @@
 (ns fhir-pogs.validator
   (:require [json-schema.core :refer [validate]]
             [cheshire.core :refer [parse-string]]
-            [fhir-pogs.db :as db]))
+            [fhir-pogs.db :as db]
+            [clojure.string :as str]))
 
 (def fhir-schema (parse-string (slurp "resources/fhir-schema.json") true))
 
@@ -164,15 +165,13 @@
                         (assoc {:type :schema-validation}
                                :errors (->> resource validate-resource ex-data :errors))))))))
 
-(defn validate-db-spec
-  "Validates database specification."
-  [db-spec]
-  (when-not (map? db-spec)
-    (throw (ex-info "The db-spec must be a map."
-                    {:type :argument-validation
-                     :name :db-spec
-                     :expected "non-empty map"
-                     :got (-> db-spec type .getSimpleName)}))))
+(defn validate-db-uri [db-uri]
+  (when-not (and (string? db-uri)
+                 (str/starts-with? db-uri "jdbc:"))
+    (throw (ex-info "Invalid database URI"
+                    {:type :validation-error
+                     :expected "JDBC URI string (e.g., jdbc:postgresql://...)"
+                     :got db-uri}))))
 
 (defn validate-mapping-fields-basic
   "Basic validation for mapping-fields parameter."
@@ -206,8 +205,8 @@
 
 (defn validate-table-columns
   "Validates that mapping fields are compatible with existing table columns."
-  [db-spec table mapping-fields]
-  (let [columns (db/get-columns db-spec table)
+  [db-uri table mapping-fields]
+  (let [columns (db/get-columns db-uri table)
         fields (process-fields mapping-fields)]
     (when (and (seq columns)
                (not-every? #(contains? columns %) fields))

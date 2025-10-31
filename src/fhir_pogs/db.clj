@@ -2,52 +2,55 @@
   (:require [next.jdbc :as jdbc]
             [honey.sql.helpers :as help]
             [honey.sql :as sql]
-            [clojure.set :as set]))
+            [fhir-pogs.validator :refer [validate-db-uri]]
+            [clojure.set :as set]
+            [fhir-pogs.db :as db]))
 ;;Execution functions
 (defn execute!
   "Execute a SQL statement against the database."
-  [db-spec sql-statement]
-  {:pre [(some? db-spec) (vector? sql-statement)]}
+  [db-uri sql-statement]
+  {:pre [(validate-db-uri db-uri) (vector? sql-statement)]}
   (try
-    (jdbc/execute! db-spec sql-statement)
+    (jdbc/execute! db-uri sql-statement)
     (catch Exception e
       (throw (ex-info "Database execution failed"
-                      {:db-spec db-spec
+                      {:db-uri db-uri
                        :sql sql-statement
                        :error (.getMessage e)})))))
 
 (defn execute-one!
   "Execute a SQL statement and return only the first result."
-  [db-spec sql-statement]
-  {:pre [(some? db-spec) (vector? sql-statement)]}
+  [db-uri sql-statement]
+  {:pre [(validate-db-uri db-uri) (vector? sql-statement)]}
   (try
-    (jdbc/execute-one! db-spec sql-statement)
+    (jdbc/execute-one! db-uri sql-statement)
     (catch Exception e
       (throw (ex-info "Database execution failed"
-                      {:db-spec db-spec
+                      {:db-uri db-uri
                        :sql sql-statement
                        :error (.getMessage e)})))))
 
 (defn transact!
   "Execute multiple SQL statements in a transaction.
    All statements succeed or all fail."
-  [db-spec sql-statements]
-  {:pre [(some? db-spec) (sequential? sql-statements) (every? vector? sql-statements)]}
+  [db-uri sql-statements]
+  {:pre [(validate-db-uri db-uri) (sequential? sql-statements) (every? vector? sql-statements)]}
   (try
-    (jdbc/with-transaction [tx db-spec]
+    (jdbc/with-transaction [tx db-uri]
       (mapv #(jdbc/execute-one! tx %) sql-statements))
     (catch Exception e
       (throw (ex-info "Transaction failed"
-                      {:db-spec db-spec
+                      {:db-uri db-uri
                        :statements sql-statements
                        :error (.getMessage e)})))))
 
 ;; Database introspection functions
 (defn get-tables
   "Returns a set of table names that exist in the public schema."
-  [db-spec]
+  [db-uri]
+  {:pre [(validate-db-uri db-uri)]}
   (try
-    (->> (execute! db-spec
+    (->> (execute! db-uri
                    (-> (help/select :table-name)
                        (help/from :information-schema.tables)
                        (help/where [:= :table-schema "public"]
@@ -57,14 +60,14 @@
          (map keyword)
          set)
     (catch Exception e
-      (throw (ex-info "Failed to get tables" {:db-spec db-spec :error (.getMessage e)})))))
+      (throw (ex-info "Failed to get tables" {:db-uri db-uri :error (.getMessage e)})))))
 
 (defn get-columns
   "Returns a set of column names for the specified table."
-  [db-spec table-name]
-  {:pre [(some? table-name)]}
+  [db-uri table-name]
+  {:pre [(validate-db-uri db-uri) (some? table-name)]}
   (try
-    (->> (execute! db-spec
+    (->> (execute! db-uri
                    (-> (help/select :column-name)
                        (help/from :information-schema.columns)
                        (help/where [:= :table-schema "public"]
@@ -76,16 +79,16 @@
          set)
     (catch Exception e
       (throw (ex-info "Failed to get columns"
-                      {:db-spec db-spec
+                      {:db-uri db-uri
                        :table-name table-name
                        :error (.getMessage e)})))))
 
 ;; Table management functions
 (defn drop-tables!
   "Drop one or more tables from the database."
-  [db-spec table-names]
-  {:pre [(some? db-spec) (sequential? table-names) (every? some? table-names)]}
-  (let [existing-tables (get-tables db-spec)
+  [db-uri table-names]
+  {:pre [(validate-db-uri db-uri) (sequential? table-names) (every? some? table-names)]}
+  (let [existing-tables (get-tables db-uri)
         tables-to-drop (if (= [:all] table-names)
                          existing-tables
                          (set (map keyword table-names)))
@@ -97,18 +100,20 @@
                        :existing-tables existing-tables})))
 
     (when (seq tables-to-drop)
-      (execute! db-spec
+      (execute! db-uri
                 (-> (apply help/drop-table tables-to-drop)
                     sql/format)))))
 
 (defn table-exists?
   "Check if a table exists in the database."
-  [db-spec table-name]
-  (contains? (get-tables db-spec) (keyword table-name)))
+  [db-uri table-name]
+  {:pre [(validate-db-uri db-uri)]}
+  (contains? (get-tables db-uri) (keyword table-name)))
 
 (defn tables-exist?
   "Check if all specified tables exist in the database."
-  [db-spec table-names]
-  (let [existing-tables (get-tables db-spec)
+  [db-uri table-names]
+  {:pre [(validate-db-uri db-uri)]}
+  (let [existing-tables (get-tables db-uri)
         requested-tables (set (map keyword table-names))]
     (set/subset? requested-tables existing-tables)))

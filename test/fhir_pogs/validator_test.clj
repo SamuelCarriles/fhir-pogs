@@ -80,15 +80,15 @@
         (is (= 1 (:resource-index (ex-data e))))))))
 
 ;; Tests for database spec validation
-(deftest test-validate-db-spec
-  (testing "valid db-spec passes"
-    (is (nil? (validator/validate-db-spec {:dbtype "postgresql" :host "localhost"}))))
+(deftest test-validate-db-uri
+  (testing "valid db-uri passes"
+    (is (nil? (validator/validate-db-uri {:dbtype "postgresql" :host "localhost"}))))
 
-  (testing "non-map db-spec throws exception"
+  (testing "non-map db-uri throws exception"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
-         #"The db-spec must be a map."
-         (validator/validate-db-spec "not-a-map")))))
+         #"The db-uri must be a map."
+         (validator/validate-db-uri "not-a-map")))))
 
 ;; Tests for mapping fields basic validation
 (deftest test-validate-mapping-fields-basic
