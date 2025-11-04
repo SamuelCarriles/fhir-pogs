@@ -10,10 +10,6 @@ INSERT INTO fhir_search_functions (search_type, modifier, handler_function, desc
 ('token', 'base', 'token_search_base', 'FHIR token search without modifiers'),
 ('token', 'text', 'token_search_text', 'Search on the text/display of the token'),
 ('token', 'not', 'token_search_not', 'Reverse the search (exclude matches)'),
-('token', 'above', 'token_search_above', 'Search for codes that are ancestors in hierarchy'),
-('token', 'below', 'token_search_below', 'Search for codes that are descendants in hierarchy'),
-('token', 'in', 'token_search_in', 'Test if the coded value is in a ValueSet'),
-('token', 'not-in', 'token_search_not_in', 'Test if the coded value is NOT in a ValueSet'),
 ('token', 'of-type', 'token_search_of_type', 'Search for identifiers of a specific type'),
 ('token', 'missing', 'token_search_missing', 'Search for resources where the parameter is missing or present');
 --;;
