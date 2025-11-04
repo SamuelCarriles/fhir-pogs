@@ -1,107 +1,107 @@
 (ns fhir-pogs.validator
   (:require [json-schema.core :refer [validate]]
             [cheshire.core :refer [parse-string]]
-            [fhir-pogs.db :as db]
-            [clojure.string :as str]))
+            [fhir-pogs.db :as db])
+  (:import [javax.sql DataSource]))
 
 (def fhir-schema (parse-string (slurp "resources/fhir-schema.json") true))
 
 
 ;; Helper functions
-  (defn- type-name [x] (-> x type .getSimpleName))
-  
-  (defn- create-error
-    ([expected got] {:expected expected :got got})
-    ([expected got index] {:expected expected :got got :index index}))
-  
-  (defn validate-resource [resource]
-    (try
-      (validate fhir-schema resource)
-      (catch clojure.lang.ExceptionInfo e
-        (let [errors (->> (ex-data e) :errors set vec)]
-          (throw (ex-info (str "Invalid resource schema\n" (.getMessage e))
-                          {:type :schema-validation :errors errors}))))))
-  
-  (defn valid-resource? [resource]
-    (try
-      (validate-resource resource)
-      true
-      (catch Exception _ false))) 
+(defn- type-name [x] (-> x type .getSimpleName))
+
+(defn- create-error
+  ([expected got] {:expected expected :got got})
+  ([expected got index] {:expected expected :got got :index index}))
+
+(defn validate-resource [resource]
+  (try
+    (validate fhir-schema resource)
+    (catch clojure.lang.ExceptionInfo e
+      (let [errors (->> (ex-data e) :errors set vec)]
+        (throw (ex-info (str "Invalid resource schema\n" (.getMessage e))
+                        {:type :schema-validation :errors errors}))))))
+
+(defn valid-resource? [resource]
+  (try
+    (validate-resource resource)
+    true
+    (catch Exception _ false)))
 
 ;; Specific validators
-  (defn- validate-keyword-or-map [item idx]
-    (when-not (or (keyword? item) (map? item))
-      [(create-error "A keyword or a keyword-to-keyword map"
-                     (str (type-name item) " element")
-                     [idx])]))
-  
-  (defn- validate-keyword-map [item idx]
-    (when (map? item)
-      (->> item
-           (map-indexed
-            (fn [map-idx [k v]]
-              (cond-> []
-                (not (keyword? k))
-                (conj (create-error "A keyword-to-keyword map"
-                                    (str (type-name k) " as key")
-                                    [idx map-idx 0]))
-                (not (keyword? v))
-                (conj (create-error "A keyword-to-keyword map"
-                                    (str (type-name v) " as value")
-                                    [idx map-idx 1])))))
-           (apply concat))))
-  
-  (defn- validate-single-mapping [mf]
-    (->> mf
-         (map-indexed (fn [idx item]
-                        (concat (validate-keyword-or-map item idx)
-                                (validate-keyword-map item idx))))
-         (apply concat)))
-  
-  (defn- validate-specialized-entry [[k v] entry-idx]
-    (let [key-errors (when-not (keyword? k)
-                       [(create-error "A keyword as key"
-                                      (str (type-name k) " element")
-                                      [entry-idx 0])])
-          value-errors (cond
-                         (empty? v)
-                         [(create-error "non-empty vector as value"
-                                        "empty vector"
-                                        [entry-idx 1])]
-  
-                         (not (vector? v))
-                         [(create-error "A vector as value"
-                                        (str (type-name v) " element")
-                                        [entry-idx 1])]
-  
-                         :else
-                         (->> (validate-single-mapping v)
-                              (map #(update % :index (partial into [entry-idx 1])))))]
-      (concat key-errors value-errors)))
-  
-  (defn- validate-specialized-mapping [mf]
-    (->> mf
-         (map-indexed (fn [idx [k v]]
-                        (validate-specialized-entry [k v] idx)))
-         (apply concat)))
-  
-  (defn- validate-empty-structure [mf]
-    (when (empty? mf)
-      [(cond
-         (vector? mf) (create-error "non-empty vector" "empty vector")
-         (map? mf) (create-error "non-empty map" "empty map")
-         :else nil)]))
-  
-  (defn validate-mapping-fields [mf mt]
-    (let [errors (concat (validate-empty-structure mf)
-                         (when-not (empty? mf)
-                           (case mt
-                             :single (validate-single-mapping mf)
-                             :specialized (validate-specialized-mapping mf)
-                             [])))]
-      (when (seq errors)
-        (throw (ex-info "Invalid mapping-fields schema."
-                        {:type :schema-validation :errors (vec errors)})))))
+(defn- validate-keyword-or-map [item idx]
+  (when-not (or (keyword? item) (map? item))
+    [(create-error "A keyword or a keyword-to-keyword map"
+                   (str (type-name item) " element")
+                   [idx])]))
+
+(defn- validate-keyword-map [item idx]
+  (when (map? item)
+    (->> item
+         (map-indexed
+          (fn [map-idx [k v]]
+            (cond-> []
+              (not (keyword? k))
+              (conj (create-error "A keyword-to-keyword map"
+                                  (str (type-name k) " as key")
+                                  [idx map-idx 0]))
+              (not (keyword? v))
+              (conj (create-error "A keyword-to-keyword map"
+                                  (str (type-name v) " as value")
+                                  [idx map-idx 1])))))
+         (apply concat))))
+
+(defn- validate-single-mapping [mf]
+  (->> mf
+       (map-indexed (fn [idx item]
+                      (concat (validate-keyword-or-map item idx)
+                              (validate-keyword-map item idx))))
+       (apply concat)))
+
+(defn- validate-specialized-entry [[k v] entry-idx]
+  (let [key-errors (when-not (keyword? k)
+                     [(create-error "A keyword as key"
+                                    (str (type-name k) " element")
+                                    [entry-idx 0])])
+        value-errors (cond
+                       (empty? v)
+                       [(create-error "non-empty vector as value"
+                                      "empty vector"
+                                      [entry-idx 1])]
+
+                       (not (vector? v))
+                       [(create-error "A vector as value"
+                                      (str (type-name v) " element")
+                                      [entry-idx 1])]
+
+                       :else
+                       (->> (validate-single-mapping v)
+                            (map #(update % :index (partial into [entry-idx 1])))))]
+    (concat key-errors value-errors)))
+
+(defn- validate-specialized-mapping [mf]
+  (->> mf
+       (map-indexed (fn [idx [k v]]
+                      (validate-specialized-entry [k v] idx)))
+       (apply concat)))
+
+(defn- validate-empty-structure [mf]
+  (when (empty? mf)
+    [(cond
+       (vector? mf) (create-error "non-empty vector" "empty vector")
+       (map? mf) (create-error "non-empty map" "empty map")
+       :else nil)]))
+
+(defn validate-mapping-fields [mf mt]
+  (let [errors (concat (validate-empty-structure mf)
+                       (when-not (empty? mf)
+                         (case mt
+                           :single (validate-single-mapping mf)
+                           :specialized (validate-specialized-mapping mf)
+                           [])))]
+    (when (seq errors)
+      (throw (ex-info "Invalid mapping-fields schema."
+                      {:type :schema-validation :errors (vec errors)})))))
 
 (defn validate-resource-basics
   "Validates basic resource requirements (id and resourceType)."
@@ -113,7 +113,7 @@
                      :name :resource
                      :expected "non-empty map"
                      :got (-> resource type .getSimpleName)}))
-    
+
     (not (:id resource))
     (throw (ex-info "Invalid resource. The key :id is required."
                     (cond-> {:type :resource-validation
@@ -130,8 +130,7 @@
                              :value nil
                              :expected "non-blank string"
                              :got "nil value"}
-                      resource-index (assoc :resource-index resource-index))))
-))
+                      resource-index (assoc :resource-index resource-index))))))
 
 (defn validate-resources-basics
   "Validates basic requirements for a collection of resources."
@@ -165,13 +164,34 @@
                         (assoc {:type :schema-validation}
                                :errors (->> resource validate-resource ex-data :errors))))))))
 
-(defn validate-db-uri [db-uri]
-  (when-not (and (string? db-uri)
-                 (str/starts-with? db-uri "jdbc:"))
-    (throw (ex-info "Invalid database URI"
-                    {:type :validation-error
-                     :expected "JDBC URI string (e.g., jdbc:postgresql://...)"
-                     :got db-uri}))))
+(defn validate-db-connectable
+  "Validates connectable is a DataSource, db-spec map, or JDBC URI."
+  [connectable]
+  (cond
+    (instance? DataSource connectable) nil
+
+    (string? connectable)
+    (when-not (re-matches #"^jdbc:.*" connectable)
+      (throw (ex-info "JDBC URI must start with 'jdbc:'"
+                      {:type :argument-validation
+                       :name :db
+                       :expected "JDBC URI starting with 'jdbc:'"
+                       :got connectable})))
+
+    (map? connectable)
+    (when-not (and (:dbtype connectable) (:dbname connectable))
+      (throw (ex-info "db-spec map must contain :dbtype and :dbname"
+                      {:type :argument-validation
+                       :name :db
+                       :expected "{:dbtype \"...\" :dbname \"...\"}"
+                       :got connectable})))
+
+    :else
+    (throw (ex-info "connectable must be a DataSource, db-spec map, or JDBC URI"
+                    {:type :argument-validation
+                     :name :db
+                     :expected "DataSource, map, or JDBC URI string"
+                     :got (type connectable)}))))
 
 (defn validate-mapping-fields-basic
   "Basic validation for mapping-fields parameter."
@@ -205,8 +225,8 @@
 
 (defn validate-table-columns
   "Validates that mapping fields are compatible with existing table columns."
-  [db-uri table mapping-fields]
-  (let [columns (db/get-columns db-uri table)
+  [connectable table mapping-fields]
+  (let [columns (db/get-columns connectable table)
         fields (process-fields mapping-fields)]
     (when (and (seq columns)
                (not-every? #(contains? columns %) fields))
