@@ -152,7 +152,8 @@
         resource-data (when (> (count fields) 3) ; More than id, resourceType, content
                         (reduce (fn [acc {:keys [name value]}]
                                   (assoc acc name value))
-                                {:id (:resource_id main-data)} ; Include id reference
+                                {:id (:resource_id main-data)
+                                 :resourceType (:resourceType main-data)} ; Include id reference
                                 resource-fields))
 
         ;; Generate SQL statements
@@ -168,7 +169,6 @@
                                (help/values [resource-data])
                                (sql/format {:quoted true}))))] 
     statements))
-
 
 ;; Improved fields-types function
 (defn fields-types

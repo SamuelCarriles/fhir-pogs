@@ -169,7 +169,7 @@
      (let [result (mapper/create-table "fhir_resources" "Patient" {:birthDate :date :gender :text})]
        (is (vector? result))
        (is (string? (first result)))
-       (is (.contains (first result) "fhir_resources_Patient"))
+       (is (.contains (first result) "fhir_resources_patient"))
        (is (.contains (first result) "birthDate"))
        (is (.contains (first result) "gender")))))
 
@@ -217,7 +217,7 @@
            statements (mapper/insert-to-sentence template "Patient")]
        (is (>= (count statements) 1))
       ; Should have both main and resource table inserts when there are extra fields
-       (is (some #(.contains (first %) "Patient") statements)))))
+       (is (some (fn [st] (some #(= "Patient" %) st)) statements)))))
 
  ;; Tests para fields-types
  (deftest test-fields-types

@@ -22,7 +22,8 @@
   See: https://cljdoc.org/d/seancorfield/next.jdbc/CURRENT/doc/getting-started#connection-pooling
     
  \n- `table-prefix`: the prefix to the name of the tables where the resource should be mapped.  
- \n- `mapping-fields`: a vector containing the names of the fields from the resource to be mapped. The names are given in keyword format. Note that the resource must contain every field that is intended to be mapped. If a field is to be added to the table that is not present in the resource—perhaps for future use—it can be written within the vector as a map, where the key is the name of the field and the value is the data type that field will store. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`  
+ \n- `mapping-fields`: a vector containing the names of the fields from the resource to be mapped. The names are given in keyword format. Note that the resource must contain every field that is intended to be mapped. If a field is to be added to the table that is not present in the resource—perhaps for future use—it can be written within the vector as a map, where the key is the name of the field and the value is the data type that field will store. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`. 
+   Fields can be of these types: `:jsonb`, `:boolean`, `:date`, `:timestamptz`, `:integer`, `:bigint`, `:numeric`, `:uuid`, `:bytea` and `:text`.  
  \n- `resource`: the FHIR resource converted into a Clojure map.  
  \nIf you only want to save the essentials fields (id,resourceType), you don't need to give mapping-fields. Example of usage:\n ```clojure\n (require '[next.jdbc :as jdbc])
  (def test-1 (parse-string <json resource> true))
@@ -35,7 +36,7 @@
  (save-resource! connectable \"fhir_resources\" [:defaults :active] test-1)
  ;;or if you only want essentials:
  (save-resource! connectable \"fhir_resources\" test-1)"
-  
+
   ([connectable ^String table-prefix resource]
    ;;Validation
    (v/validate-db-connectable connectable)
@@ -267,9 +268,9 @@
                     (sql/format {:quoted true})))]
 
     ;; Execute and process results
-    (->> (db/execute! connectable query)
-         (mapcat vals)
-         (map mapper/parse-jsonb-obj))))
+    (vec (->> (db/execute! connectable query)
+              (mapcat vals)
+              (map mapper/parse-jsonb-obj)))))
 
 (defn delete-resources! "This function works just like `search-resources!`, except instead of returning a sequence of resources, it gives you a fully-realized result set from `next.jdbc` to confirm the operation went through."
   [connectable ^String table-prefix ^String restype conditions]

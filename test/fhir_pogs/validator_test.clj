@@ -82,7 +82,11 @@
 ;; Tests for database spec validation
 (deftest test-validate-db-connectable
   (testing "valid connectable passes"
-    (is (nil? (validator/validate-db-connectable {:dbtype "postgresql" :host "localhost"})))
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"db-spec map must contain :dbtype and :dbname"
+         (validator/validate-db-connectable {:dbtype "postgresql" :host "localhost"})))
+    (is (nil? (validator/validate-db-connectable {:dbtype "postgresql" :dbname "resources_test" :host "localhost"})))
     (is (nil? (validator/validate-db-connectable "jdbc:postgresql://localhost:5432/resources?user=postgres&password=postgres")))))
 
 ;; Tests for mapping fields basic validation

@@ -79,10 +79,10 @@
 
 ;; Table management functions
 (defn drop-tables!
-  "Drop one or more tables from the database."
+  "Drop one or more tables from the database. If you want to drop all, use `:all` as second argument."
   [connectable table-names] 
   (let [existing-tables (get-tables connectable)
-        tables-to-drop (if (= [:all] table-names)
+        tables-to-drop (if (= :all table-names)
                          existing-tables
                          (set (map keyword table-names)))
         missing-tables (set/difference tables-to-drop existing-tables)]
