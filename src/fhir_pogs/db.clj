@@ -1,13 +1,13 @@
 (ns fhir-pogs.db
   (:require [next.jdbc :as jdbc]
             [honey.sql.helpers :as help]
-            [honey.sql :as sql] 
+            [honey.sql :as sql]
             [clojure.set :as set]
             [fhir-pogs.db :as db]))
 ;;Execution functions
 (defn execute!
   "Execute a SQL statement against the database."
-  [connectable sql-statement] 
+  [connectable sql-statement]
   (try
     (jdbc/execute! connectable sql-statement)
     (catch Exception e
@@ -18,7 +18,7 @@
 
 (defn execute-one!
   "Execute a SQL statement and return only the first result."
-  [connectable sql-statement] 
+  [connectable sql-statement]
   (try
     (jdbc/execute-one! connectable sql-statement)
     (catch Exception e
@@ -30,7 +30,7 @@
 (defn transact!
   "Execute multiple SQL statements in a transaction.
    All statements succeed or all fail."
-  [connectable sql-statements] 
+  [connectable sql-statements]
   (try
     (jdbc/with-transaction [tx connectable]
       (mapv #(jdbc/execute-one! tx %) sql-statements))
@@ -43,7 +43,7 @@
 ;; Database introspection functions
 (defn get-tables
   "Returns a set of table names that exist in the public schema."
-  [connectable] 
+  [connectable]
   (try
     (->> (execute! connectable
                    (-> (help/select :table-name)
@@ -59,7 +59,7 @@
 
 (defn get-columns
   "Returns a set of column names for the specified table."
-  [connectable table-name] 
+  [connectable table-name]
   (try
     (->> (execute! connectable
                    (-> (help/select :column-name)
@@ -80,7 +80,7 @@
 ;; Table management functions
 (defn drop-tables!
   "Drop one or more tables from the database. If you want to drop all, use `:all` as second argument."
-  [connectable table-names] 
+  [connectable table-names]
   (let [existing-tables (get-tables connectable)
         tables-to-drop (if (= :all table-names)
                          existing-tables
@@ -99,12 +99,14 @@
 
 (defn table-exists?
   "Check if a table exists in the database."
-  [connectable table-name] 
-  (contains? (get-tables connectable) (keyword table-name)))
+  [connectable table-name]
+  {:pre [(keyword? table-name)]}
+  (contains? (get-tables connectable) table-name))
 
 (defn tables-exist?
   "Check if all specified tables exist in the database."
-  [connectable table-names] 
+  [connectable table-names]
+  {:pre [(every? keyword? table-names)]}
   (let [existing-tables (get-tables connectable)
-        requested-tables (set (map keyword table-names))]
+        requested-tables (set table-names)]
     (set/subset? requested-tables existing-tables)))

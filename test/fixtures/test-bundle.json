@@ -12,7 +12,9 @@
           {
             "use": "official",
             "family": "Doe",
-            "given": ["John"]
+            "given": [
+              "John"
+            ]
           }
         ],
         "identifier": [
@@ -41,7 +43,9 @@
         "name": [
           {
             "family": "Smith",
-            "given": ["Jane"]
+            "given": [
+              "Jane"
+            ]
           }
         ],
         "identifier": [
@@ -159,6 +163,13 @@
       "resource": {
         "resourceType": "Condition",
         "id": "condition-2",
+        "meta": {
+          "lastUpdated": "2024-01-15T10:30:00Z"
+        },
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Resolved Hypertension for Patient/patient-2</div>"
+        },
         "clinicalStatus": {
           "coding": [
             {

@@ -136,12 +136,7 @@
    (testing "UUID"
      (let [[type value] (mapper/type-of "urn:uuid:123e4567-e89b-12d3-a456-426614174000")]
        (is (= :uuid type))
-       (is (pg-object? value))))
-
-   (testing "Base64"
-     (let [[type value] (mapper/type-of "SGVsbG8gV29ybGQ=")]
-       (is (= :bytea type))
-       (is (pg-object? value))))
+       (is (pg-object? value)))) 
 
    (testing "Default text type"
      (let [[type value] (mapper/type-of "random string")]

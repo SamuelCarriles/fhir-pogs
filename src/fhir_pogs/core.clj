@@ -11,7 +11,12 @@
   (let [restype (:resourceType resource)
         template (mapper/template table-prefix (keys fields) resource)]
     (mapper/insert-to-sentence template restype)))
-
+(build-insert-sentences "core_testing" [:status :subject] {:id "obs-1",
+                                                           :code
+                                                           {:text "Heart Rate Measurement", :coding [{:code "8867-4", :system "http://loinc.org", :display "Heart rate"}]},
+                                                           :status "final",
+                                                           :subject {:reference "Patient/patient-1"},
+                                                           :resourceType "Observation"})
 (defn save-resource!
   "Maps and saves a FHIR resource into a database.  
  \n- `connectable`: Database connection. Can be:
@@ -23,7 +28,7 @@
     
  \n- `table-prefix`: the prefix to the name of the tables where the resource should be mapped.  
  \n- `mapping-fields`: a vector containing the names of the fields from the resource to be mapped. The names are given in keyword format. Note that the resource must contain every field that is intended to be mapped. If a field is to be added to the table that is not present in the resource—perhaps for future use—it can be written within the vector as a map, where the key is the name of the field and the value is the data type that field will store. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`. 
-   Fields can be of these types: `:jsonb`, `:boolean`, `:date`, `:timestamptz`, `:integer`, `:bigint`, `:numeric`, `:uuid`, `:bytea` and `:text`.  
+   Fields can be of these types: `:jsonb`, `:boolean`, `:date`, `:timestamptz`, `:integer`, `:bigint`, `:numeric`, `:uuid` and `:text`.  
  \n- `resource`: the FHIR resource converted into a Clojure map.  
  \nIf you only want to save the essentials fields (id,resourceType), you don't need to give mapping-fields. Example of usage:\n ```clojure\n (require '[next.jdbc :as jdbc])
  (def test-1 (parse-string <json resource> true))
@@ -96,13 +101,14 @@
                          :got "coll of resources with different :resourceType"})))))
 
   ;; Build and execute transaction
-  (let [fields (mapper/fields-types (remove #{:id :resourceType} mapping-fields) resources)
+  (let [fields (->> (apply max-key #(count (select-keys % (vec (remove map? mapping-fields)))) resources)
+                (mapper/fields-types (remove #{:id :resourceType} mapping-fields)))
         base-sentences [(mapper/create-table table-prefix)]
         create-specific (when (some (fn [r] (some #(get r %) (keys fields))) resources)
                           [(mapper/create-table table-prefix (:resourceType (first resources)) fields)])
         insert-sentences (mapcat (fn [resource]
                                    (build-insert-sentences table-prefix fields resource))
-                                 resources)]
+                                 resources)] 
     (->> (concat base-sentences create-specific insert-sentences)
          (db/transact! connectable)
          mapper/return-value-process)))
@@ -135,7 +141,8 @@
                                      (let [restype (:resourceType resource)
                                            restype-key (keyword (.toLowerCase restype))
                                            fields-to-map (get-resource-fields mapping-fields restype-key)
-                                           fields (mapper/fields-types (remove #{:id :resourceType} fields-to-map) resources)
+                                           fields (->> (apply max-key #(count (select-keys % (vec (remove map? fields-to-map)))) resources)
+                                                   (mapper/fields-types (remove #{:id :resourceType} fields-to-map)))
                                            create-specific (when (some #(get resource %) (keys fields))
                                                              [(mapper/create-table table-prefix restype fields)])]
                                        (concat create-specific

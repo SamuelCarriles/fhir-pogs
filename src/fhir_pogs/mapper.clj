@@ -82,10 +82,7 @@
       [:numeric (BigDecimal. v)] 
 
       (re-matches (:uuid regex-patterns) v)
-      [:uuid (to-pg-obj "uuid" v)]
-
-      (re-matches (:base64 regex-patterns) v)
-      [:bytea (to-pg-obj "bytea" v)]
+      [:uuid (to-pg-obj "uuid" v)] 
 
       :else [:text v])))
 

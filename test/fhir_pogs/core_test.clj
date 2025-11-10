@@ -8,7 +8,7 @@
             [config.core :as cfg]
             [config.dotenv :as dotenv]))
 
-(def load-test-resources
+(def test-resources
   (-> "fixtures/test-bundle.json"
       resource
       slurp
@@ -24,40 +24,89 @@
       get-datasource))
 
 
-(defn clean-tables-fixture [f]
-  (db/drop-tables! connectable :all)
-  f)
+(db/drop-tables! connectable :all)
 
-(use-fixtures :once clean-tables-fixture)
+(defn clean-tables-fixture [f]
+  (f)
+  (db/drop-tables! connectable :all))
+
+(use-fixtures :each clean-tables-fixture)
 
 (deftest test-save-resource!
   (testing "Basic save without mapping fields"
     (let [table-prefix "core_testing"
-          resource (rand-nth load-test-resources)
-          result (crud/save-resource! connectable table-prefix resource)]
-      (is (= resource result))
-      (is (= 1 (count result))) 
-
-      (let [tables (db/get-tables connectable)]
-        (is (= 1 (count tables)))
-        (is (= :core_testing_main (first tables)))
-
-        (let [columns (db/get-columns connectable :core_testing_main)
-              spec-columns #{:content :resourceType :resource_id}]
-          (is (= spec-columns columns))))))
+          resource (rand-nth test-resources)
+          result (crud/save-resource! connectable table-prefix resource)
+          tables (db/get-tables connectable)
+          spec-columns #{:content :resourceType :resource_id}]
+      (is (= resource (first result)))
+      (is (= 1 (count result)))
+      (is (= 1 (count tables)))
+      (is (= :core_testing_main (first tables)))
+      (is (= spec-columns (db/get-columns connectable :core_testing_main)))))
   ;;
   (testing "Advanced save with mapping fields"
     (let [table-prefix "core_testing"
-          resource (first load-test-resources)
-          result (crud/save-resource! connectable table-prefix [:gender :active :name] resource)]
-      (is (= resource result))
+          resource (first test-resources)
+          result (crud/save-resource! connectable table-prefix [:gender :active :name] resource)
+          tables (db/get-tables connectable)
+          spec-tables #{:core_testing_main :core_testing_patient}
+          spec-columns #{:name :resourceType :active :id :gender}]
+      (is (= resource (first result)))
       (is (= 1 (count result)))
-      
-      (let [tables (db/get-tables connectable)
-            spec-tables #{:core_testing_main :core_testing_patient}]
-        (is (= spec-tables tables))
-        (let [special-table-columns (db/get-columns connectable :core_testing_patient)
-              spec-columns #{:name :resourceType :active :id :gender}]
-          (is (= special-table-columns spec-columns)))))))
+      (is (= spec-tables tables))
+      (is (= spec-columns (db/get-columns connectable :core_testing_patient))))))
+
+(deftest test-table-generation
+  (testing "Map the fields correctly for a known resource."
+    (let [resource (first (filter #(= (:id %) "obs-2") test-resources))
+          spec-tables #{:core_testing_main :core_testing_observation}
+          spec-columns #{:id :resourceType :status :code}]
+      (crud/save-resource! connectable "core_testing" [:code :status] resource)
+      (is (= spec-tables (db/get-tables connectable)))
+      (is (= spec-columns (db/get-columns connectable :core_testing_observation))))
+    (db/drop-tables! connectable :all))
+  (testing "Using :defaults option"
+    (let [resource (first (filter #(= (:id %) "condition-2") test-resources))
+          spec-tables #{:core_testing_main :core_testing_condition}
+          columns #{:id :resourceType :meta :text}]
+      (db/drop-tables! connectable :all)
+      (crud/save-resource! connectable "core_testing" [:defaults] resource)
+      (is (= spec-tables (db/get-tables connectable)))
+      (is (= columns (db/get-columns connectable :core_testing_condition))))))
+
+(deftest test-save-resources!
+  (testing "Basic resource collection save"
+    (crud/save-resources! connectable "core_testing" test-resources)
+    (is (= (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))
+           (count test-resources)))
+    (is (= #{:resource_id :resourceType :content} (db/get-columns connectable :core_testing_main)))
+    (db/drop-tables! connectable :all))
+  ;;
+  (testing "Advanced resource collection save"
+    (let [observations (filter #(= (:resourceType %) "Observation") test-resources)]
+      (crud/save-resources! connectable "core_testing" :single [:status :subject] observations)
+      (is (= (count observations)
+             (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))))
+      (is (and (db/table-exists? connectable :core_testing_main)
+               (db/table-exists? connectable :core_testing_observation)))
+      (is (= #{:status :subject} (db/get-columns connectable :core_testing_observation))))))
+
+
+
+
+(comment
+  ;;To test database connection
+  (db/execute! connectable ["SELECT 1 AS ok"])
+  (db/drop-tables! connectable :all)
+  (db/get-tables connectable)
+  (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))
+
+  (db/table-exists? connectable :core_testing_main)
+
+  (let [observations (filter #(= (:resourceType %) "Observation") test-resources)]
+    (crud/save-resources! connectable "core_testing" :specialized {:observation [:status :subject]
+                                                                   :patient [:name]} test-resources))
+  :.)
 
 
