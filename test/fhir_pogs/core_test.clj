@@ -83,30 +83,71 @@
     (is (= #{:resource_id :resourceType :content} (db/get-columns connectable :core_testing_main)))
     (db/drop-tables! connectable :all))
   ;;
-  (testing "Advanced resource collection save"
+  (testing "Advanced resource collection save with :single mapping type"
     (let [observations (filter #(= (:resourceType %) "Observation") test-resources)]
       (crud/save-resources! connectable "core_testing" :single [:status :subject] observations)
       (is (= (count observations)
              (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))))
       (is (and (db/table-exists? connectable :core_testing_main)
                (db/table-exists? connectable :core_testing_observation)))
-      (is (= #{:status :subject} (db/get-columns connectable :core_testing_observation))))))
+      (is (= #{:resourceType :id :status :subject} (db/get-columns connectable :core_testing_observation))))
+    (db/drop-tables! connectable :all))
+;;
+  (testing "Advanced resource collection save with :specialized mapping type"
+    (crud/save-resources!
+     connectable
+     "core_testing"
+     :specialized
+     {:patient [:name]
+      :observation [:code :status :subject]
+      :condition [:defaults :subject]}
+     test-resources)
+    
+    (is (= (count test-resources) 
+           (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))))
+    (is (= 3 (count (db/execute! connectable ["SELECT id FROM core_testing_patient"]))))
+    (is (= 3 (count (db/execute! connectable ["SELECT id FROM core_testing_observation"]))))
+    (is (= 2 (count (db/execute! connectable ["SELECT id FROM core_testing_condition"]))))
+    
+    (is (= #{:resourceType :id :name} (db/get-columns connectable :core_testing_patient)))
+    (is (= #{:resourceType :id :code :status :subject} (db/get-columns connectable :core_testing_observation)))
+    (is (= #{:resourceType :id :meta :text :subject} (db/get-columns connectable :core_testing_condition)))
+    (db/drop-tables! connectable :all))
+  ;;
+  (testing "Advanced resource collection save with :specialized mapping type using :all option"
+    (crud/save-resources!
+     connectable
+     "core_testing"
+     :specialized
+     {:all [:defaults]}
+     test-resources)
+    
+    (is (= (count test-resources)
+           (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))))
+    (is (= 1 (count (db/execute! connectable ["SELECT id FROM core_testing_condition"])))) 
+    (db/drop-tables! connectable :all))
+  ;;
+  (testing "Advanced resource collection save with :specialized mapping type using :others option"
+    (crud/save-resources!
+     connectable
+     "core_testing"
+     :specialized
+     {:patient [:identifier]
+      :others [:defaults]}
+     test-resources)
+  
+    (is (= (count test-resources)
+           (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))))
+    (is (= 1 (count (db/execute! connectable ["SELECT id FROM core_testing_condition"]))))
+    (is (= 2 (count (db/execute! connectable ["SELECT id FROM core_testing_patient"]))))
+    (db/drop-tables! connectable :all)))
 
 
 
 
 (comment
   ;;To test database connection
-  (db/execute! connectable ["SELECT 1 AS ok"])
-  (db/drop-tables! connectable :all)
-  (db/get-tables connectable)
-  (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))
-
-  (db/table-exists? connectable :core_testing_main)
-
-  (let [observations (filter #(= (:resourceType %) "Observation") test-resources)]
-    (crud/save-resources! connectable "core_testing" :specialized {:observation [:status :subject]
-                                                                   :patient [:name]} test-resources))
+  
   :.)
 
 

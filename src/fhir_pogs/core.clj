@@ -11,12 +11,7 @@
   (let [restype (:resourceType resource)
         template (mapper/template table-prefix (keys fields) resource)]
     (mapper/insert-to-sentence template restype)))
-(build-insert-sentences "core_testing" [:status :subject] {:id "obs-1",
-                                                           :code
-                                                           {:text "Heart Rate Measurement", :coding [{:code "8867-4", :system "http://loinc.org", :display "Heart rate"}]},
-                                                           :status "final",
-                                                           :subject {:reference "Patient/patient-1"},
-                                                           :resourceType "Observation"})
+
 (defn save-resource!
   "Maps and saves a FHIR resource into a database.  
  \n- `connectable`: Database connection. Can be:
