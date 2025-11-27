@@ -287,10 +287,10 @@
 
   (when (seq (search-resources connectable table-prefix restype conditions))
     (let [table (keyword (str table-prefix "_main"))
-          all-cond (into [:and [:= :resourcetype restype]] conditions)
+          all-cond (into [:and [:= :resourceType restype]] conditions)
           sentence (-> (help/delete-from table)
                        (help/where all-cond)
-                       sql/format)]
+                       (sql/format {:quoted true}))]
       (db/execute! connectable sentence))))
 
 (defn update-resource! "Here’s what you need to pass in:
@@ -326,19 +326,20 @@
   (when (seq (search-resources connectable table-prefix restype [[:= :resource_id id] [:= :resourceType restype]]))
     (let [main (keyword (str table-prefix "_main"))
           table (keyword (str table-prefix "_" (.toLowerCase restype)))
-          columns (remove #{:resourcetype :id} (db/get-columns connectable (name table)))
+          columns (remove #{:resourceType :id} (db/get-columns connectable (name table)))
           base-sentence (-> (help/update main)
                             (help/set {:content (mapper/to-pg-obj "jsonb" new-content)})
                             (help/where [:= :resource_id id])
                             (help/returning :content)
-                            sql/format)
+                            (sql/format {:quoted true}))
           full-sentence (if (seq columns)
                           [base-sentence
                            (-> (help/update table)
                                (help/set (reduce #(assoc %1 %2 (second (mapper/type-of (get new-content %2))))
                                                  {} columns))
                                (help/where [:= :id id])
-                               sql/format)]
+                               (sql/format
+                               {:quoted true}))]
                           [base-sentence])]
       (mapper/return-value-process (db/transact! connectable full-sentence)))))
 
