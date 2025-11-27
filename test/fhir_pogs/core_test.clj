@@ -6,7 +6,8 @@
             [clojure.java.io :refer [resource]]
             [next.jdbc :refer [get-datasource]]
             [config.core :as cfg]
-            [config.dotenv :as dotenv]))
+            [config.dotenv :as dotenv]
+            [clojure.core :as c]))
 
 (def test-resources
   (-> "fixtures/test-bundle.json"
@@ -23,12 +24,8 @@
       :uri
       get-datasource))
 
-
-(defn clean-tables-fixture [f] 
-  (f)
-  (db/drop-tables! connectable :all))
-
-(use-fixtures :each clean-tables-fixture)
+(use-fixtures :once (fn [f] (db/drop-tables! connectable :all) (f)))
+(use-fixtures :each (fn [f] (f) (db/drop-tables! connectable :all)))
 ;;; ============================================================================
 ;;; SAVE-RESOURCE! TESTS
 ;;; ============================================================================
@@ -116,214 +113,211 @@
 ;;; SAVE-RESOURCES! TESTS
 ;;; ============================================================================
 
-  (deftest test-save-resources-basic
-    (testing "Basic resource collection save - only main table"
-      (let [result (crud/save-resources! connectable "core_testing" test-resources)
-            tables (db/get-tables connectable)
-            saved-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))]
+(deftest test-save-resources-basic
+  (testing "Basic resource collection save - only main table"
+    (let [result (crud/save-resources! connectable "core_testing" test-resources)
+          tables (db/get-tables connectable)
+          saved-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))]
 
-        (is (= 8 (count result)))
-        (is (= 8 saved-count))
-        (is (= #{:core_testing_main} tables))
-        (is (= #{:resource_id :resourceType :content} (db/get-columns connectable :core_testing_main))))))
+      (is (= 8 (count result)))
+      (is (= 8 saved-count))
+      (is (= #{:core_testing_main} tables))
+      (is (= #{:resource_id :resourceType :content} (db/get-columns connectable :core_testing_main))))))
 
-  (deftest test-save-resources-single-mapping
-    (testing "Single mapping type with same resource type"
-      (let [observations (filter #(= (:resourceType %) "Observation") test-resources)
-            _ (crud/save-resources! connectable "core_testing" :single [:status :subject] observations)
-            obs-with-status-or-subj (filter #(or (:status %) (:subject %)) observations)
-            tables (db/get-tables connectable)
-            obs-columns (db/get-columns connectable :core_testing_observation)
-            saved-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))]
+(deftest test-save-resources-single-mapping
+  (testing "Single mapping type with same resource type"
+    (let [observations (filter #(= (:resourceType %) "Observation") test-resources)
+          _ (crud/save-resources! connectable "core_testing" :single [:status :subject] observations)
+          obs-with-status-or-subj (filter #(or (:status %) (:subject %)) observations)
+          tables (db/get-tables connectable)
+          obs-columns (db/get-columns connectable :core_testing_observation)
+          saved-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))]
 
-        (is (= 3 saved-count))
-        (is (= #{:core_testing_main :core_testing_observation} tables))
-        (is (= #{:resourceType :id :status :subject} obs-columns))
+      (is (= 3 saved-count))
+      (is (= #{:core_testing_main :core_testing_observation} tables))
+      (is (= #{:resourceType :id :status :subject} obs-columns))
 
         ;; Verificar que todos los observations tienen sus datos
-        (doseq [obs obs-with-status-or-subj]
-          (let [saved (db/execute-one! connectable
-                                       ["SELECT * FROM core_testing_observation WHERE id = ?" (:id obs)])]
-            (is (some? saved))
-            (is (= (:id obs) (:core_testing_observation/id saved))))))))
+      (doseq [obs obs-with-status-or-subj]
+        (let [saved (db/execute-one! connectable
+                                     ["SELECT * FROM core_testing_observation WHERE id = ?" (:id obs)])]
+          (is (some? saved))
+          (is (= (:id obs) (:core_testing_observation/id saved))))))))
 
-  (deftest test-save-resources-single-mapping-errors
-    (testing "Single mapping throws on different resource types"
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"don't have .* resourceType"
-                            (crud/save-resources! connectable "core_testing" :single [:status]
-                                                  [(first (filter #(= (:resourceType %) "Patient") test-resources))
-                                                   (first (filter #(= (:resourceType %) "Observation") test-resources))]))))
+(deftest test-save-resources-single-mapping-errors
+  (testing "Single mapping throws on different resource types"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"don't have .* resourceType"
+                          (crud/save-resources! connectable "core_testing" :single [:status]
+                                                [(first (filter #(= (:resourceType %) "Patient") test-resources))
+                                                 (first (filter #(= (:resourceType %) "Observation") test-resources))]))))
 
-    (testing "Single mapping throws when mapping-fields is not a vector"
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"mapping-fields param must be a vector"
-                            (crud/save-resources! connectable "core_testing" :single {:bad "map"} test-resources)))))
+  (testing "Single mapping throws when mapping-fields is not a vector"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"mapping-fields param must be a vector"
+                          (crud/save-resources! connectable "core_testing" :single {:bad "map"} test-resources)))))
 
-  (deftest test-save-resources-specialized-mapping
-    (testing "Specialized mapping with specific resource configurations"
-      (crud/save-resources!
-       connectable
-       "core_testing"
-       :specialized
-       {:patient [:name :gender]
-        :observation [:code :status :subject]
-        :condition [:defaults :subject]}
-       test-resources)
+(deftest test-save-resources-specialized-mapping
+  (testing "Specialized mapping with specific resource configurations"
+    (crud/save-resources!
+     connectable
+     "core_testing"
+     :specialized
+     {:patient [:name :gender]
+      :observation [:code :status :subject]
+      :condition [:defaults :subject]}
+     test-resources)
 
-      (let [tables (db/get-tables connectable)
-            main-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))
-            patient-count (count (db/execute! connectable ["SELECT id FROM core_testing_patient"]))
-            obs-count (count (db/execute! connectable ["SELECT id FROM core_testing_observation"]))
-            cond-count (count (db/execute! connectable ["SELECT id FROM core_testing_condition"]))]
+    (let [tables (db/get-tables connectable)
+          main-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))
+          patient-count (count (db/execute! connectable ["SELECT id FROM core_testing_patient"]))
+          obs-count (count (db/execute! connectable ["SELECT id FROM core_testing_observation"]))
+          cond-count (count (db/execute! connectable ["SELECT id FROM core_testing_condition"]))]
 
-        (is (= 8 main-count))
-        (is (= 3 patient-count))
-        (is (= 3 obs-count))
-        (is (= 2 cond-count))
+      (is (= 8 main-count))
+      (is (= 3 patient-count))
+      (is (= 3 obs-count))
+      (is (= 2 cond-count))
 
-        (is (= #{:core_testing_main :core_testing_patient
-                 :core_testing_observation :core_testing_condition}
-               tables))
+      (is (= #{:core_testing_main :core_testing_patient
+               :core_testing_observation :core_testing_condition}
+             tables))
 
-        (is (= #{:resourceType :id :name :gender}
-               (db/get-columns connectable :core_testing_patient)))
-        (is (= #{:resourceType :id :code :status :subject}
-               (db/get-columns connectable :core_testing_observation)))
-        (is (= #{:resourceType :id :meta :text :subject}
-               (db/get-columns connectable :core_testing_condition))))))
+      (is (= #{:resourceType :id :name :gender}
+             (db/get-columns connectable :core_testing_patient)))
+      (is (= #{:resourceType :id :code :status :subject}
+             (db/get-columns connectable :core_testing_observation)))
+      (is (= #{:resourceType :id :meta :text :subject}
+             (db/get-columns connectable :core_testing_condition))))))
 
-  (deftest test-save-resources-specialized-with-all
-    (testing "Specialized mapping using :all option applies to all resources"
-      (crud/save-resources!
-       connectable
-       "core_testing"
-       :specialized
-       {:all [:defaults]}
-       test-resources)
+(deftest test-save-resources-specialized-with-all
+  (testing "Specialized mapping using :all option applies to all resources"
+    (crud/save-resources!
+     connectable
+     "core_testing"
+     :specialized
+     {:all [:defaults]}
+     test-resources)
 
-      (let [tables (db/get-tables connectable)
-            main-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))
-            patient-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\"= ?" "Patient"]))
-            obs-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\"= ?" "Observation"]))
-            cond-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\"= ?" "Condition"]))]
+    (let [tables (db/get-tables connectable)
+          main-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main"]))
+          patient-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\"= ?" "Patient"]))
+          obs-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\"= ?" "Observation"]))
+          cond-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\"= ?" "Condition"]))]
 
-        (is (= 8 main-count))
-        (is (= 3 patient-count))
-        (is (= 3 obs-count))
-        (is (= 2 cond-count))
-        (is (= #{:core_testing_main :core_testing_condition} tables)) 
-        (is (= #{:resourceType :id :meta :text} (db/get-columns connectable :core_testing_condition))))))
+      (is (= 8 main-count))
+      (is (= 3 patient-count))
+      (is (= 3 obs-count))
+      (is (= 2 cond-count))
+      (is (= #{:core_testing_main :core_testing_condition} tables))
+      (is (= #{:resourceType :id :meta :text} (db/get-columns connectable :core_testing_condition))))))
 
-  (deftest test-save-resources-specialized-with-others
-    (testing "Specialized mapping using :others for unspecified types"
-      (crud/save-resources!
-       connectable
-       "core_testing"
-       :specialized
-       {:patient [:identifier]
-        :others [:defaults]}
-       test-resources)
+(deftest test-save-resources-specialized-with-others
+  (testing "Specialized mapping using :others for unspecified types"
+    (crud/save-resources!
+     connectable
+     "core_testing"
+     :specialized
+     {:patient [:identifier]
+      :others [:defaults]}
+     test-resources)
 
-      (let [patient-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\" = ?" "Patient"]))
-            patient-with-identifier-count (count (db/execute! connectable ["SELECT id FROM core_testing_patient"]))
-            obs-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\" = ?" "Observation"]))
-            cond-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\" = ?" "Condition"]))
-            cond-with-defaults-count (count (db/execute! connectable ["SELECT id FROM core_testing_condition"]))]
+    (let [patient-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\" = ?" "Patient"]))
+          patient-with-identifier-count (count (db/execute! connectable ["SELECT id FROM core_testing_patient"]))
+          obs-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\" = ?" "Observation"]))
+          cond-count (count (db/execute! connectable ["SELECT resource_id FROM core_testing_main WHERE \"resourceType\" = ?" "Condition"]))
+          cond-with-defaults-count (count (db/execute! connectable ["SELECT id FROM core_testing_condition"]))]
 
-        (is (= 3 patient-count))
-        (is (= 3 obs-count))
-        (is (= 2 cond-count))
+      (is (= 3 patient-count))
+      (is (= 3 obs-count))
+      (is (= 2 cond-count))
 
-        (is (= 2 patient-with-identifier-count))
-        (is (= 1 cond-with-defaults-count))
+      (is (= 2 patient-with-identifier-count))
+      (is (= 1 cond-with-defaults-count))
 
-        (is (not (db/table-exists? connectable :core_testing_observation)))
+      (is (not (db/table-exists? connectable :core_testing_observation)))
 
-        (is (= #{:resourceType :id :identifier} (db/get-columns connectable :core_testing_patient)))
-        (is (= #{:resourceType :id :meta :text} (db/get-columns connectable :core_testing_condition))))))
+      (is (= #{:resourceType :id :identifier} (db/get-columns connectable :core_testing_patient)))
+      (is (= #{:resourceType :id :meta :text} (db/get-columns connectable :core_testing_condition))))))
 
-  (deftest test-save-resources-error-handling
-    (testing "Throws on non-sequential resources"
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"resources param must be a coll"
-                            (crud/save-resources! connectable "test" {:not "a vector"}))))
+(deftest test-save-resources-error-handling
+  (testing "Throws on non-sequential resources"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"resources param must be a coll"
+                          (crud/save-resources! connectable "test" {:not "a vector"}))))
 
-    (testing "Throws on invalid mapping-type"
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"mapping-type given is invalid"
-                            (crud/save-resources! connectable "test" :invalid [:field] test-resources))))
+  (testing "Throws on invalid mapping-type"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"mapping-type given is invalid"
+                          (crud/save-resources! connectable "test" :invalid [:field] test-resources))))
 
-    (testing "Throws when mapping-type is not a keyword"
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"mapping-type must be a keyword"
-                            (crud/save-resources! connectable "test" "single" [:field] test-resources))))
+  (testing "Throws when mapping-type is not a keyword"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"mapping-type must be a keyword"
+                          (crud/save-resources! connectable "test" "single" [:field] test-resources))))
 
-    (testing "Throws on specialized mapping with non-map mapping-fields"
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"mapping-fields param must be a map"
-                            (crud/save-resources! connectable "test" :specialized [:field] test-resources)))))
+  (testing "Throws on specialized mapping with non-map mapping-fields"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"mapping-fields param must be a map"
+                          (crud/save-resources! connectable "test" :specialized [:field] test-resources)))))
 
-  (deftest test-save-resources-transaction-rollback
-    (testing "Transaction rolls back on error - nothing is saved"
-      (let [bad-resources (conj test-resources {:id "bad" :resourceType "Bad" :invalid true})]
-        (is (thrown? Exception
-                     (crud/save-resources! connectable "core_testing" bad-resources)))
+(deftest test-save-resources-transaction-rollback
+  (testing "Transaction rolls back on error - nothing is saved"
+    (let [bad-resources (conj test-resources {:id "bad" :resourceType "Bad" :invalid true})]
+      (is (thrown? Exception
+                   (crud/save-resources! connectable "core_testing" bad-resources)))
         ;; Verificar que NO se guardó nada
-        (is (empty? (filter #(re-find #"core_testing" (name %)) (db/get-tables connectable)))))))
+      (is (empty? (filter #(re-find #"core_testing" (name %)) (db/get-tables connectable)))))))
 
-
-
-(comment
-
-  
-  ;;; ============================================================================
+ ;;; ============================================================================
  ;;; SEARCH-RESOURCES TESTS
  ;;; ============================================================================
 
-  (deftest test-search-resources-basic
-    (testing "Search resources with simple condition"
-      (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
-        (crud/save-resource! connectable "test" [:gender :active] patient)
-
-        (let [found (crud/search-resources connectable "test" "Patient"
-                                           [[:= :resource_id (:id patient)]])]
-          (is (= 1 (count found)))
-          (is (= patient (first found)))))))
-
-  (deftest test-search-resources-multiple-conditions
-    (testing "Search with multiple conditions using AND"
-      (let [patients (filter #(= (:resourceType %) "Patient") test-resources)]
-        (crud/save-resources! connectable "test" :single [:gender :active] patients)
-
-        ;; Buscar pacientes activos
-        (let [active-patients (crud/search-resources connectable "test" "Patient"
-                                                     [[:= :active true]])]
-          (is (seq active-patients))
-          (is (every? #(= true (:active %)) active-patients))))))
-
-  (deftest test-search-resources-no-results
-    (testing "Search returns empty vector when no matches"
-      (crud/save-resource! connectable "test" (first test-resources))
+(deftest test-search-resources-basic
+  (testing "Search resources with simple condition"
+    (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
+      (crud/save-resource! connectable "test" [:gender :active] patient)
 
       (let [found (crud/search-resources connectable "test" "Patient"
-                                         [[:= :resource_id "non-existent-id"]])]
-        (is (empty? found))
-        (is (vector? found)))))
+                                         [[:= :resource_id (:id patient)]])]
+        (is (= 1 (count found)))
+        (is (= patient (first found)))))))
 
-  (deftest test-search-resources-without-specific-table
-    (testing "Search works even when specific resource table doesn't exist"
-      (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
+(deftest test-search-resources-multiple-conditions
+  (testing "Search with multiple conditions using AND"
+    (let [patients (filter #(= (:resourceType %) "Patient") test-resources)]
+      (crud/save-resources! connectable "test" :single [:gender :active] patients)
+
+        ;; Buscar pacientes activos
+      (let [active-patients (crud/search-resources connectable "test" "Patient"
+                                                   [[:= :active true]])]
+        (is (seq active-patients))
+        (is (every? #(= true (:active %)) active-patients))))))
+
+(deftest test-search-resources-no-results
+  (testing "Search returns empty vector when no matches"
+    (crud/save-resource! connectable "test" (first test-resources))
+
+    (let [found (crud/search-resources connectable "test" "Patient"
+                                       [[:= :resource_id "non-existent-id"]])]
+      (is (empty? found))
+      (is (vector? found)))))
+
+(deftest test-search-resources-without-specific-table
+  (testing "Search works even when specific resource table doesn't exist"
+    (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
         ;; Guardar sin mapping fields (solo main table)
-        (crud/save-resource! connectable "test" patient)
+      (crud/save-resource! connectable "test" patient)
 
-        (let [found (crud/search-resources connectable "test" "Patient"
-                                           [[:= :resource_id (:id patient)]])]
-          (is (= 1 (count found)))
-          (is (= patient (first found)))))))
+      (let [found (crud/search-resources connectable "test" "Patient"
+                                         [[:= :resource_id (:id patient)]])]
+        (is (= 1 (count found)))
+        (is (= patient (first found)))))))
 
-  (deftest test-search-resources-error-handling
-    (testing "Throws on invalid conditions parameter"
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"conditions must be a vector"
-                            (crud/search-resources connectable "test" "Patient" {:not "a vector"})))))
+(deftest test-search-resources-error-handling
+  (testing "Throws on invalid conditions parameter"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"conditions must be a vector"
+                          (crud/search-resources connectable "test" "Patient" {:not "a vector"})))))
 
- ;;; ============================================================================
+(comment
+
+;;; ============================================================================
  ;;; DELETE-RESOURCES! TESTS
  ;;; ============================================================================
 
@@ -500,6 +494,5 @@
         (is (every? #(contains? % :status) observations))
         (is (every? #(contains? % :meta) conditions)))))
 
-  :.
-  )
+  :.)
 

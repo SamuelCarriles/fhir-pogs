@@ -183,7 +183,7 @@
 
         ;; Infer types from resource data
         inferred-types (reduce (fn [acc field]
-                                 (if-let [value (get resource field)]
+                                 (if-some [value (get resource field)]
                                    (assoc acc field (first (type-of value)))
                                    acc))
                                {} final-fields)]
