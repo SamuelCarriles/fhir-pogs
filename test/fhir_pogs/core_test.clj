@@ -315,14 +315,13 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"conditions must be a vector"
                           (crud/search-resources connectable "test" "Patient" {:not "a vector"})))))
 
-(comment
 
 ;;; ============================================================================
- ;;; DELETE-RESOURCES! TESTS
+ ;;; DELETE-RESOURCE! TESTS
  ;;; ============================================================================
 
   (deftest test-delete-resources-basic
-    (testing "Delete resources and verify removal"
+    (testing "Delete resource and verify removal"
       (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
         (crud/save-resource! connectable "test" [:gender] patient)
 
@@ -332,8 +331,7 @@
           (is (= 1 (count before))))
 
         ;; Eliminar
-        (crud/delete-resources! connectable "test" "Patient"
-                                [[:= :resource_id (:id patient)]])
+        (crud/delete-resource! connectable "test" "Patient" (:id patient))
 
         ;; Verificar que ya no existe
         (let [after (crud/search-resources connectable "test" "Patient"
@@ -346,7 +344,10 @@
         (crud/save-resources! connectable "test" :single [:active] patients)
 
         ;; Eliminar todos los pacientes activos
-        (crud/delete-resources! connectable "test" "Patient" [[:= :active true]])
+        (let [active-patients (crud/search-resources connectable "test" "Patient" [[:= :active true]])]
+          (doseq [patient active-patients]
+            (crud/delete-resource! connectable "test" "Patient" (:id patient))))
+      
 
         ;; Verificar que se eliminaron
         (let [remaining (crud/search-resources connectable "test" "Patient" [])]
@@ -356,15 +357,15 @@
     (testing "Delete returns nil when no resources match"
       (crud/save-resource! connectable "test" (first test-resources))
 
-      (let [result (crud/delete-resources! connectable "test" "Patient"
-                                           [[:= :resource_id "non-existent"]])]
+      (let [result (crud/delete-resource! connectable "test" "Patient" "non-existent")]
         (is (nil? result)))))
 
   (deftest test-delete-resources-error-handling
-    (testing "Throws on invalid conditions parameter"
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"conditions must be a vector"
-                            (crud/delete-resources! connectable "test" "Patient" {:not "a vector"})))))
+    (testing "Throws on invalid id parameter"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"id must be a non-empty string"
+                            (crud/delete-resource! connectable "test" "Patient" "")))))
 
+(comment
  ;;; ============================================================================
  ;;; UPDATE-RESOURCE! TESTS
  ;;; ============================================================================

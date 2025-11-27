@@ -3,7 +3,8 @@
             [fhir-pogs.db :as db]
             [fhir-pogs.validator :as v]
             [honey.sql.helpers :as help]
-            [honey.sql :as sql]))
+            [honey.sql :as sql]
+            [clojure.string :as str]))
 
 (defn- build-insert-sentences
   "Builds SQL insert sentences for a resource."
@@ -97,13 +98,13 @@
 
   ;; Build and execute transaction
   (let [fields (->> (apply max-key #(count (select-keys % (vec (remove map? mapping-fields)))) resources)
-                (mapper/fields-types (remove #{:id :resourceType} mapping-fields)))
+                    (mapper/fields-types (remove #{:id :resourceType} mapping-fields)))
         base-sentences [(mapper/create-table table-prefix)]
         create-specific (when (some (fn [r] (some #(get r %) (keys fields))) resources)
                           [(mapper/create-table table-prefix (:resourceType (first resources)) fields)])
         insert-sentences (mapcat (fn [resource]
                                    (build-insert-sentences table-prefix fields resource))
-                                 resources)] 
+                                 resources)]
     (->> (concat base-sentences create-specific insert-sentences)
          (db/transact! connectable)
          mapper/return-value-process)))
@@ -137,7 +138,7 @@
                                            restype-key (keyword (.toLowerCase restype))
                                            fields-to-map (get-resource-fields mapping-fields restype-key)
                                            fields (->> (apply max-key #(count (select-keys % (vec (remove map? fields-to-map)))) resources)
-                                                   (mapper/fields-types (remove #{:id :resourceType} fields-to-map)))
+                                                       (mapper/fields-types (remove #{:id :resourceType} fields-to-map)))
                                            create-specific (when (some #(get resource %) (keys fields))
                                                              [(mapper/create-table table-prefix restype fields)])]
                                        (concat create-specific
@@ -274,22 +275,31 @@
               (mapcat vals)
               (map mapper/parse-jsonb-obj)))))
 
-(defn delete-resources! "This function works just like `search-resources!`, except instead of returning a sequence of resources, it gives you a fully-realized result set from `next.jdbc` to confirm the operation went through."
-  [connectable ^String table-prefix ^String restype conditions]
+(defn delete-resource!
+  "Delete a resource from by ResourceType and ID.\n This function takes four arguments:
+ - `connectable`: Database connection. Can be:
+    * A javax.sql.DataSource (RECOMMENDED for production - enables connection pooling)
+    * A db-spec map: {:dbtype \"postgresql\", :dbname \"...\", ...}
+    * A JDBC URI string: \"jdbc:postgresql://localhost:5432/dbname?user=...\"
+  
+  See: https://cljdoc.org/d/seancorfield/next.jdbc/CURRENT/doc/getting-started#connection-pooling.
+ - `table-prefix`: the prefix used for the tables you're working with.
+ - `restype`: the type of resource you're looking for.
+ - `id`: the ID of the resource you want to delete."
+  [connectable ^String table-prefix ^String restype ^String id]
   ;;Validation
   (v/validate-db-connectable connectable)
-  (when-not (vector? conditions)
-    (throw (ex-info "conditions must be a vector"
+  (when (and (string? id) (str/blank? id))
+    (throw (ex-info "id must be a non-empty string"
                     {:type :argument-validation
-                     :name :conditions
-                     :expected "non-empty vector"
-                     :got (-> conditions type .getSimpleName)})))
+                     :name :id
+                     :expected "non-empty string"
+                     :got "empty string"})))
 
-  (when (seq (search-resources connectable table-prefix restype conditions))
+  (when (seq (search-resources connectable table-prefix restype [[:= :resource_id id]]))
     (let [table (keyword (str table-prefix "_main"))
-          all-cond (into [:and [:= :resourceType restype]] conditions)
           sentence (-> (help/delete-from table)
-                       (help/where all-cond)
+                       (help/where [:and [:= :resourceType restype] [:= :resource_id id]])
                        (sql/format {:quoted true}))]
       (db/execute! connectable sentence))))
 
@@ -339,7 +349,7 @@
                                                  {} columns))
                                (help/where [:= :id id])
                                (sql/format
-                               {:quoted true}))]
+                                {:quoted true}))]
                           [base-sentence])]
       (mapper/return-value-process (db/transact! connectable full-sentence)))))
 
