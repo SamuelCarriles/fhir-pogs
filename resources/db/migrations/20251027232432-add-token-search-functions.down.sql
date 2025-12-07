@@ -1,0 +1,13 @@
+DROP FUNCTION IF EXISTS fhir_token_search;
+--;;
+DROP FUNCTION IF EXISTS token_search_of_type;
+--;;
+DROP FUNCTION IF EXISTS token_search_text;
+--;;
+DROP FUNCTION IF EXISTS token_search_missing;
+--;;
+DROP FUNCTION IF EXISTS token_search_not;
+--;;
+DROP FUNCTION IF EXISTS token_search_base;
+--;;
+DROP TABLE IF EXISTS fhir_search_functions;

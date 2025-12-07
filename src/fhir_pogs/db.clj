@@ -6,48 +6,45 @@
 ;;Execution functions
 (defn execute!
   "Execute a SQL statement against the database."
-  [db-spec sql-statement]
-  {:pre [(some? db-spec) (vector? sql-statement)]}
+  [connectable sql-statement]
   (try
-    (jdbc/execute! db-spec sql-statement)
+    (jdbc/execute! connectable sql-statement)
     (catch Exception e
       (throw (ex-info "Database execution failed"
-                      {:db-spec db-spec
+                      {:connectable connectable
                        :sql sql-statement
                        :error (.getMessage e)})))))
 
 (defn execute-one!
   "Execute a SQL statement and return only the first result."
-  [db-spec sql-statement]
-  {:pre [(some? db-spec) (vector? sql-statement)]}
+  [connectable sql-statement]
   (try
-    (jdbc/execute-one! db-spec sql-statement)
+    (jdbc/execute-one! connectable sql-statement)
     (catch Exception e
       (throw (ex-info "Database execution failed"
-                      {:db-spec db-spec
+                      {:connectable connectable
                        :sql sql-statement
                        :error (.getMessage e)})))))
 
 (defn transact!
   "Execute multiple SQL statements in a transaction.
    All statements succeed or all fail."
-  [db-spec sql-statements]
-  {:pre [(some? db-spec) (sequential? sql-statements) (every? vector? sql-statements)]}
+  [connectable sql-statements]
   (try
-    (jdbc/with-transaction [tx db-spec]
+    (jdbc/with-transaction [tx connectable]
       (mapv #(jdbc/execute-one! tx %) sql-statements))
     (catch Exception e
       (throw (ex-info "Transaction failed"
-                      {:db-spec db-spec
+                      {:connectable connectable
                        :statements sql-statements
                        :error (.getMessage e)})))))
 
 ;; Database introspection functions
 (defn get-tables
   "Returns a set of table names that exist in the public schema."
-  [db-spec]
+  [connectable]
   (try
-    (->> (execute! db-spec
+    (->> (execute! connectable
                    (-> (help/select :table-name)
                        (help/from :information-schema.tables)
                        (help/where [:= :table-schema "public"]
@@ -57,14 +54,13 @@
          (map keyword)
          set)
     (catch Exception e
-      (throw (ex-info "Failed to get tables" {:db-spec db-spec :error (.getMessage e)})))))
+      (throw (ex-info "Failed to get tables" {:connectable connectable :error (.getMessage e)})))))
 
 (defn get-columns
   "Returns a set of column names for the specified table."
-  [db-spec table-name]
-  {:pre [(some? table-name)]}
+  [connectable table-name]
   (try
-    (->> (execute! db-spec
+    (->> (execute! connectable
                    (-> (help/select :column-name)
                        (help/from :information-schema.columns)
                        (help/where [:= :table-schema "public"]
@@ -76,17 +72,16 @@
          set)
     (catch Exception e
       (throw (ex-info "Failed to get columns"
-                      {:db-spec db-spec
+                      {:connectable connectable
                        :table-name table-name
                        :error (.getMessage e)})))))
 
 ;; Table management functions
 (defn drop-tables!
-  "Drop one or more tables from the database."
-  [db-spec table-names]
-  {:pre [(some? db-spec) (sequential? table-names) (every? some? table-names)]}
-  (let [existing-tables (get-tables db-spec)
-        tables-to-drop (if (= [:all] table-names)
+  "Drop one or more tables from the database. If you want to drop all, use `:all` as second argument."
+  [connectable table-names]
+  (let [existing-tables (get-tables connectable)
+        tables-to-drop (if (= :all table-names)
                          existing-tables
                          (set (map keyword table-names)))
         missing-tables (set/difference tables-to-drop existing-tables)]
@@ -97,18 +92,20 @@
                        :existing-tables existing-tables})))
 
     (when (seq tables-to-drop)
-      (execute! db-spec
+      (execute! connectable
                 (-> (apply help/drop-table tables-to-drop)
                     sql/format)))))
 
 (defn table-exists?
   "Check if a table exists in the database."
-  [db-spec table-name]
-  (contains? (get-tables db-spec) (keyword table-name)))
+  [connectable table-name]
+  {:pre [(keyword? table-name)]}
+  (contains? (get-tables connectable) table-name))
 
 (defn tables-exist?
   "Check if all specified tables exist in the database."
-  [db-spec table-names]
-  (let [existing-tables (get-tables db-spec)
-        requested-tables (set (map keyword table-names))]
+  [connectable table-names]
+  {:pre [(every? keyword? table-names)]}
+  (let [existing-tables (get-tables connectable)
+        requested-tables (set table-names)]
     (set/subset? requested-tables existing-tables)))

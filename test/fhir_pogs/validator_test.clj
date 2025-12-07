@@ -80,15 +80,14 @@
         (is (= 1 (:resource-index (ex-data e))))))))
 
 ;; Tests for database spec validation
-(deftest test-validate-db-spec
-  (testing "valid db-spec passes"
-    (is (nil? (validator/validate-db-spec {:dbtype "postgresql" :host "localhost"}))))
-
-  (testing "non-map db-spec throws exception"
+(deftest test-validate-db-connectable
+  (testing "valid connectable passes"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
-         #"The db-spec must be a map."
-         (validator/validate-db-spec "not-a-map")))))
+         #"db-spec map must contain :dbtype and :dbname"
+         (validator/validate-db-connectable {:dbtype "postgresql" :host "localhost"})))
+    (is (nil? (validator/validate-db-connectable {:dbtype "postgresql" :dbname "resources_test" :host "localhost"})))
+    (is (nil? (validator/validate-db-connectable "jdbc:postgresql://localhost:5432/resources?user=postgres&password=postgres")))))
 
 ;; Tests for mapping fields basic validation
 (deftest test-validate-mapping-fields-basic

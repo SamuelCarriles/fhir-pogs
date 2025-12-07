@@ -4,3 +4,4 @@
 .calva/
 doc/
 .nrepl-port
+.env

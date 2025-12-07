@@ -3,7 +3,8 @@
             [fhir-pogs.db :as db]
             [fhir-pogs.validator :as v]
             [honey.sql.helpers :as help]
-            [honey.sql :as sql]))
+            [honey.sql :as sql]
+            [clojure.string :as str]))
 
 (defn- build-insert-sentences
   "Builds SQL insert sentences for a resource."
@@ -12,43 +13,51 @@
         template (mapper/template table-prefix (keys fields) resource)]
     (mapper/insert-to-sentence template restype)))
 
-(defn save-resource! "Maps and saves a FHIR resource into a database.  
- \n- `db-spec`: the database specifications. For example: \n{:dbtype \"postgresql\", \n:dbname \"resources\", \n:host \"localhost\", \n:user \"postgres\", \n:port \"5432\", \n:password \"postgres\"}  
+(defn save-resource!
+  "Maps and saves a FHIR resource into a database.  
+ \n- `connectable`: Database connection. Can be:
+    * A javax.sql.DataSource (RECOMMENDED for production - enables connection pooling)
+    * A db-spec map: {:dbtype \"postgresql\", :dbname \"...\", ...}
+    * A JDBC URI string: \"jdbc:postgresql://localhost:5432/dbname?user=...\"
+  
+  See: https://cljdoc.org/d/seancorfield/next.jdbc/CURRENT/doc/getting-started#connection-pooling
+    
  \n- `table-prefix`: the prefix to the name of the tables where the resource should be mapped.  
- \n- `mapping-fields`: a vector containing the names of the fields from the resource to be mapped. The names are given in keyword format. Note that the resource must contain every field that is intended to be mapped. If a field is to be added to the table that is not present in the resource—perhaps for future use—it can be written within the vector as a map, where the key is the name of the field and the value is the data type that field will store. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`  
+ \n- `mapping-fields`: a vector containing the names of the fields from the resource to be mapped. The names are given in keyword format. Note that the resource must contain every field that is intended to be mapped. If a field is to be added to the table that is not present in the resource—perhaps for future use—it can be written within the vector as a map, where the key is the name of the field and the value is the data type that field will store. Some examples: `[:meta :text :active :deceased]`, `[:defaults {:some-field :type-of-field}]`. 
+   Fields can be of these types: `:jsonb`, `:boolean`, `:date`, `:timestamptz`, `:integer`, `:bigint`, `:numeric`, `:uuid` and `:text`.  
  \n- `resource`: the FHIR resource converted into a Clojure map.  
- \nIf you only want to save the essentials fields (id,resourceType), you don't need to give mapping-fields. Example of usage:\n ```clojure\n (def test-1 (parse-string <json resource> true))
+ \nIf you only want to save the essentials fields (id,resourceType), you don't need to give mapping-fields. Example of usage:\n ```clojure\n (require '[next.jdbc :as jdbc])
+ (def test-1 (parse-string <json resource> true))
 
-  (def db-spec {:dbtype \"postgresql\"
-                :dbname \"resources\"
-                :host \"localhost\"
-                :user \"postgres\"
-                :port \"5432\"
-                :password \"postgres\"})
+ (def connectable
+   (jdbc/get-datasource
+     \"jdbc:postgresql://localhost:5432/resources?user=postgres&password=postgres\"))
+  
 
-  (save-resource! db-spec \"fhir_resources\" [:defaults :active] test-1)
-  ;;or if you only want essentials:
-  (save-resource! db-spec \"fhir_resources\" test-1)"
-  ([db-spec ^String table-prefix resource]
+ (save-resource! connectable \"fhir_resources\" [:defaults :active] test-1)
+ ;;or if you only want essentials:
+ (save-resource! connectable \"fhir_resources\" test-1)"
+
+  ([connectable ^String table-prefix resource]
    ;;Validation
-   (v/validate-db-spec db-spec)
+   (v/validate-db-connectable connectable)
    (v/validate-resource-basics resource nil)
    (v/validate-resource resource)
 
    ;;Operation
    (let [base [(mapper/create-table table-prefix)]
          sentences (into base (build-insert-sentences table-prefix [] resource))]
-     (mapper/return-value-process (db/transact! db-spec sentences))))
+     (mapper/return-value-process (db/transact! connectable sentences))))
 
-  ([db-spec ^String table-prefix mapping-fields resource]
+  ([connectable ^String table-prefix mapping-fields resource]
    ;; Validation
-   (v/validate-db-spec db-spec)
+   (v/validate-db-connectable connectable)
    (v/validate-mapping-fields-basic mapping-fields)
    (v/validate-resource-basics resource nil)
 
    ;; Validate table columns if table exists
    (let [table (str table-prefix "_" (.toLowerCase (:resourceType resource)))]
-     (v/validate-table-columns db-spec table mapping-fields))
+     (v/validate-table-columns connectable table mapping-fields))
 
    (v/validate-mapping-fields mapping-fields :single)
    (v/validate-resource resource)
@@ -59,22 +68,22 @@
          create-specific (when (some #(get resource %) (keys fields))
                            [(mapper/create-table table-prefix restype fields)])
          sentences (->> (build-insert-sentences table-prefix fields resource)
-                        (concat base create-specific))] 
-     (mapper/return-value-process (db/transact! db-spec sentences)))))
+                        (concat base create-specific))]
+     (mapper/return-value-process (db/transact! connectable sentences)))))
 
 
 ;;
 
 (defn- process-single-mapping
   "Processes resources with single mapping type."
-  [db-spec table-prefix mapping-fields resources]
+  [connectable table-prefix mapping-fields resources]
   ;; Validate mapping fields
   (v/validate-mapping-fields mapping-fields :single)
 
   ;; Validate table columns
   (let [first-restype (:resourceType (first resources))
         table (str table-prefix "_" (.toLowerCase first-restype))]
-    (v/validate-table-columns db-spec table mapping-fields))
+    (v/validate-table-columns connectable table mapping-fields))
 
   ;; Validate all resources have same type
   (let [expected-type (:resourceType (first resources))]
@@ -88,7 +97,8 @@
                          :got "coll of resources with different :resourceType"})))))
 
   ;; Build and execute transaction
-  (let [fields (mapper/fields-types (remove #{:id :resourceType} mapping-fields) resources)
+  (let [fields (->> (apply max-key #(count (select-keys % (vec (remove map? mapping-fields)))) resources)
+                    (mapper/fields-types (remove #{:id :resourceType} mapping-fields)))
         base-sentences [(mapper/create-table table-prefix)]
         create-specific (when (some (fn [r] (some #(get r %) (keys fields))) resources)
                           [(mapper/create-table table-prefix (:resourceType (first resources)) fields)])
@@ -96,7 +106,7 @@
                                    (build-insert-sentences table-prefix fields resource))
                                  resources)]
     (->> (concat base-sentences create-specific insert-sentences)
-         (db/transact! db-spec)
+         (db/transact! connectable)
          mapper/return-value-process)))
 
 (defn- get-resource-fields
@@ -109,17 +119,17 @@
 
 (defn- process-specialized-mapping
   "Processes resources with specialized mapping type."
-  [db-spec table-prefix mapping-fields resources]
+  [connectable table-prefix mapping-fields resources]
   ;; Validate mapping fields
   (v/validate-mapping-fields mapping-fields :specialized)
 
   ;; Validate table columns for :all fields
   (when-let [all-fields (:all mapping-fields)]
-    (let [existing-tables (->> (db/get-tables db-spec)
+    (let [existing-tables (->> (db/get-tables connectable)
                                (filter #(and (re-find (re-pattern (str table-prefix ".*")) (name %))
                                              (not (re-find #"_main$" (name %))))))]
       (doseq [table existing-tables]
-        (v/validate-table-columns db-spec (name table) all-fields))))
+        (v/validate-table-columns connectable (name table) all-fields))))
 
   ;; Build and execute transaction
   (let [base-sentences [(mapper/create-table table-prefix)]
@@ -127,24 +137,31 @@
                                      (let [restype (:resourceType resource)
                                            restype-key (keyword (.toLowerCase restype))
                                            fields-to-map (get-resource-fields mapping-fields restype-key)
-                                           fields (mapper/fields-types (remove #{:id :resourceType} fields-to-map) resources)
+                                           fields (->> (apply max-key #(count (select-keys % (vec (remove map? fields-to-map)))) resources)
+                                                       (mapper/fields-types (remove #{:id :resourceType} fields-to-map)))
                                            create-specific (when (some #(get resource %) (keys fields))
                                                              [(mapper/create-table table-prefix restype fields)])]
                                        (concat create-specific
                                                (build-insert-sentences table-prefix fields resource))))
                                    resources)]
     (->> (concat base-sentences resource-sentences)
-         (db/transact! db-spec)
+         (db/transact! connectable)
          mapper/return-value-process)))
 
 (defn save-resources! "Works very similarly to `save-resource!`, with the difference that it handles multiple resources instead of just one. All resources are stored within a transaction. The resources can have two types of mapping:  
  \n- `:single`: all resources are of the same type, so they can be inserted into a single table. For this type, the mapping-fields parameter is a vector of fields in keyword format.  
  \n- `:specialized`: resources are of various types, so a separate table is created for each resource type. For this type, mapping-fields is a map where the keys are the resource types and the values are vectors containing the fields in keyword format. There are two reserved keywords: `:all` and `:others`. The first is used when specifying the fields to extract from all resources, and the second when specific resource types and their fields have been defined, and additional fields need to be specified for any other resource types. It is recommended to always include :others, but if omitted and a resource of an unspecified type is encountered, only the basic fields will be mapped in the main or controlling table. By basic fields we mean :id, :resourceType, and :content.  
- \nExample of a function call: \n```clojure \n(save-resources! db-spec \"fhir_reources\" :single [:defaults] <resources>) \n(save-resources! db-spec \"fhir_resources_database\" :specialized {:all [:text]} <resources>)
- (save-resources! db-spec \"fhir_resources_database\" :specialized {:patient [:defaults :name], :others [:defaults]} <resources>)"
-  ([db-spec ^String table-prefix resources]
+ \nExample of a function call: \n```clojure 
+ (require '[next.jdbc :as jdbc])
+ 
+ (def connectable (jdbc/get-datasource \"jdbc:postgresql://localhost:5432/resources?user=postgres&password=postgres\"))
+ 
+ (save-resources! connectable \"fhir_reources\" :single [:defaults] <resources>) 
+ (save-resources! connectable \"fhir_resources_database\" :specialized {:all [:text]} <resources>)
+ (save-resources! connectable \"fhir_resources_database\" :specialized {:patient [:defaults :name], :others [:defaults]} <resources>)"
+  ([connectable ^String table-prefix resources]
    ;;Validation
-   (v/validate-db-spec db-spec)
+   (v/validate-db-connectable connectable)
    (when-not (sequential? resources)
      (throw (ex-info "The resources param must be a coll that implements the sequential interface."
                      {:type :argument-validation
@@ -158,12 +175,12 @@
    (let [base-sentences [(mapper/create-table table-prefix)]
          insert-sentences (mapcat #(build-insert-sentences table-prefix [] %) resources)]
      (->> (concat base-sentences insert-sentences)
-          (db/transact! db-spec)
+          (db/transact! connectable)
           mapper/return-value-process)))
 
-  ([db-spec ^String table-prefix mapping-type mapping-fields resources]
+  ([connectable ^String table-prefix mapping-type mapping-fields resources]
    ;; Basic validation
-   (v/validate-db-spec db-spec)
+   (v/validate-db-connectable connectable)
    (when-not (sequential? resources)
      (throw (ex-info "The resources param must be a coll that implements the sequential interface."
                      {:type :argument-validation
@@ -190,7 +207,7 @@
                           :name :mapping-fields
                           :expected "non-empty vector"
                           :got (-> mapping-fields type .getSimpleName)})))
-       (process-single-mapping db-spec table-prefix mapping-fields resources))
+       (process-single-mapping connectable table-prefix mapping-fields resources))
 
      :specialized
      (do
@@ -200,7 +217,7 @@
                           :name :mapping-fields
                           :expected "non-empty map"
                           :got (-> mapping-fields type .getSimpleName)})))
-       (process-specialized-mapping db-spec table-prefix mapping-fields resources))
+       (process-specialized-mapping connectable table-prefix mapping-fields resources))
 
      ;; Invalid mapping type
      (throw (ex-info "The mapping-type given is invalid. Use :single or :specialized."
@@ -216,19 +233,24 @@
   [table-prefix restype conditions]
   (let [table (keyword (str table-prefix "_" (.toLowerCase restype)))
         main (keyword (str table-prefix "_main"))
-        all-cond (into [:and [:= (keyword "m.resourcetype") restype]] conditions)]
+        all-cond (into [:and [:= :m.resourceType restype]] conditions)]
     {:table table
      :main main
      :conditions all-cond}))
 
 (defn search-resources "Return a coll of the resources found.\n This function takes four arguments:
- - `db-spec`: the database config where the search will happen.
+ - `connectable`: Database connection. Can be:
+    * A javax.sql.DataSource (RECOMMENDED for production - enables connection pooling)
+    * A db-spec map: {:dbtype \"postgresql\", :dbname \"...\", ...}
+    * A JDBC URI string: \"jdbc:postgresql://localhost:5432/dbname?user=...\"
+  
+  See: https://cljdoc.org/d/seancorfield/next.jdbc/CURRENT/doc/getting-started#connection-pooling.
  - `table-prefix`: the prefix used for the tables you're working with.
  - `restype`: the type of resource you're looking for.
  - `conditions`: a vector of vectors, each one representing a condition that the resource has to meet to be returned."
-  [db-spec ^String table-prefix ^String restype conditions]
+  [connectable ^String table-prefix ^String restype conditions]
   ;; Validation
-  (v/validate-db-spec db-spec)
+  (v/validate-db-connectable connectable)
   (when-not (vector? conditions)
     (throw (ex-info "conditions must be a vector"
                     {:type :argument-validation
@@ -237,54 +259,66 @@
                      :got (-> conditions type .getSimpleName)})))
 
   (let [{:keys [table main conditions]} (build-search-query table-prefix restype conditions)
-        query (if (contains? (db/get-tables db-spec) table)
+        query (if (and (> (count conditions) 2) (contains? (db/get-tables connectable) table))
                 (-> (help/select :content)
                     (help/from [main :m])
-                    (help/join table [:= :resource-id :id])
+                    (help/join [table :t] [:and 
+                                           [:= :m.resource_id :t.id]
+                                           [:= :m.resourceType :t.resourceType]])
                     (help/where conditions)
-                    sql/format)
+                    (sql/format {:quoted true}))
                 (-> (help/select :content)
                     (help/from [main :m])
                     (help/where conditions)
-                    sql/format))]
+                    (sql/format {:quoted true})))]
 
     ;; Execute and process results
-    (->> (db/execute! db-spec query)
-         (mapcat vals)
-         (map mapper/parse-jsonb-obj))))
+    (vec (->> (db/execute! connectable query)
+              (mapcat vals)
+              (map mapper/parse-jsonb-obj)))))
 
-(defn delete-resources! "This function works just like `search-resources!`, except instead of returning a sequence of resources, it gives you a fully-realized result set from `next.jdbc` to confirm the operation went through."
-  [db-spec ^String table-prefix ^String restype conditions]
+(defn delete-resource!
+  "Delete a resource from by ResourceType and ID.\n This function takes four arguments:
+ - `connectable`: Database connection. Can be:
+    * A javax.sql.DataSource (RECOMMENDED for production - enables connection pooling)
+    * A db-spec map: {:dbtype \"postgresql\", :dbname \"...\", ...}
+    * A JDBC URI string: \"jdbc:postgresql://localhost:5432/dbname?user=...\"
+  
+  See: https://cljdoc.org/d/seancorfield/next.jdbc/CURRENT/doc/getting-started#connection-pooling.
+ - `table-prefix`: the prefix used for the tables you're working with.
+ - `restype`: the type of resource you're looking for.
+ - `id`: the ID of the resource you want to delete."
+  [connectable ^String table-prefix ^String restype ^String id]
   ;;Validation
-  (v/validate-db-spec db-spec)
-  (when-not (vector? conditions)
-    (throw (ex-info "conditions must be a vector"
+  (v/validate-db-connectable connectable)
+  (when (and (string? id) (str/blank? id))
+    (throw (ex-info "id must be a non-empty string"
                     {:type :argument-validation
-                     :name :conditions
-                     :expected "non-empty vector"
-                     :got (-> conditions type .getSimpleName)})))
+                     :name :id
+                     :expected "non-empty string"
+                     :got "empty string"})))
 
-  (when (seq (search-resources db-spec table-prefix restype conditions))
+  (when (seq (search-resources connectable table-prefix restype [[:= :resource_id id]]))
     (let [table (keyword (str table-prefix "_main"))
-          all-cond (into [:and [:= :resourcetype restype]] conditions)
           sentence (-> (help/delete-from table)
-                       (help/where all-cond)
-                       sql/format)]
-      (db/execute! db-spec sentence))))
+                       (help/where [:and [:= :resourceType restype] [:= :resource_id id]])
+                       (sql/format {:quoted true}))]
+      (db/execute! connectable sentence))))
 
 (defn update-resource! "Here’s what you need to pass in:
- - `db-spec`: your database config.
+ - `connectable`: Database connection. Can be:
+    * A javax.sql.DataSource (RECOMMENDED for production - enables connection pooling)
+    * A db-spec map: {:dbtype \"postgresql\", :dbname \"...\", ...}
+    * A JDBC URI string: \"jdbc:postgresql://localhost:5432/dbname?user=...\"
+  
+  See: https://cljdoc.org/d/seancorfield/next.jdbc/CURRENT/doc/getting-started#connection-pooling
  - `table-prefix`: the table prefix you're working with.
  - `restype`: the type of resource you're updating.
  - `id`: the ID of the resource you want to update.
  - `new-content`: the full resource with the updated fields."
-  [db-spec ^String table-prefix ^String restype ^String id new-content]
+  [connectable ^String table-prefix ^String restype ^String id new-content]
   ;;Validation
-  (v/validate-db-spec db-spec)
-
-  (when (or (not (:id new-content))
-            (not (v/valid-resource? new-content)))
-    (v/validate-resource new-content))
+  (v/validate-db-connectable connectable)
 
   (when (or (not= restype (:resourceType new-content))
             (not= id (:id new-content)))
@@ -297,22 +331,38 @@
                                  ":resourceType"
                                  ":id"))})))
 
-  (when (seq (search-resources db-spec table-prefix restype [[:= :resource_id id] [:= :resourceType restype]]))
+  (when (not (v/valid-resource? new-content))
+   (v/validate-resource new-content))
+
+  (when (seq (search-resources connectable table-prefix restype [[:= :resource_id id]]))
     (let [main (keyword (str table-prefix "_main"))
           table (keyword (str table-prefix "_" (.toLowerCase restype)))
-          columns (remove #{:resourcetype :id} (db/get-columns db-spec (name table)))
+          columns (remove #{:resourceType :id} (db/get-columns connectable (name table)))
           base-sentence (-> (help/update main)
                             (help/set {:content (mapper/to-pg-obj "jsonb" new-content)})
                             (help/where [:= :resource_id id])
                             (help/returning :content)
-                            sql/format)
+                            (sql/format {:quoted true}))
           full-sentence (if (seq columns)
                           [base-sentence
                            (-> (help/update table)
                                (help/set (reduce #(assoc %1 %2 (second (mapper/type-of (get new-content %2))))
                                                  {} columns))
                                (help/where [:= :id id])
-                               sql/format)]
+                               (sql/format
+                                {:quoted true}))]
                           [base-sentence])]
-      (mapper/return-value-process (db/transact! db-spec full-sentence)))))
+      (when-let [returned (db/transact! connectable full-sentence)]
+        (mapper/return-value-process returned)))))
 
+(comment
+  
+  (-> (help/select :content)
+      (help/from ["test_main" :m])
+      (help/join ["test_observations" :t] [:and
+                             [:= :resource_id :id]
+                             [:= :m.resourceType :t.resourceType]])
+      (help/where [])
+      (sql/format {:quoted true :inline true}))
+  
+  :.)

@@ -82,10 +82,7 @@
       [:numeric (BigDecimal. v)] 
 
       (re-matches (:uuid regex-patterns) v)
-      [:uuid (to-pg-obj "uuid" v)]
-
-      (re-matches (:base64 regex-patterns) v)
-      [:bytea (to-pg-obj "bytea" v)]
+      [:uuid (to-pg-obj "uuid" v)] 
 
       :else [:text v])))
 
@@ -152,7 +149,8 @@
         resource-data (when (> (count fields) 3) ; More than id, resourceType, content
                         (reduce (fn [acc {:keys [name value]}]
                                   (assoc acc name value))
-                                {:id (:resource_id main-data)} ; Include id reference
+                                {:id (:resource_id main-data)
+                                 :resourceType (:resourceType main-data)} ; Include id reference
                                 resource-fields))
 
         ;; Generate SQL statements
@@ -168,7 +166,6 @@
                                (help/values [resource-data])
                                (sql/format {:quoted true}))))] 
     statements))
-
 
 ;; Improved fields-types function
 (defn fields-types
@@ -186,7 +183,7 @@
 
         ;; Infer types from resource data
         inferred-types (reduce (fn [acc field]
-                                 (if-let [value (get resource field)]
+                                 (if-some [value (get resource field)]
                                    (assoc acc field (first (type-of value)))
                                    acc))
                                {} final-fields)]
