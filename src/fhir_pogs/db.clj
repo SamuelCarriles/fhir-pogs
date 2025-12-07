@@ -2,8 +2,7 @@
   (:require [next.jdbc :as jdbc]
             [honey.sql.helpers :as help]
             [honey.sql :as sql]
-            [clojure.set :as set]
-            [fhir-pogs.db :as db]))
+            [clojure.set :as set]))
 ;;Execution functions
 (defn execute!
   "Execute a SQL statement against the database."

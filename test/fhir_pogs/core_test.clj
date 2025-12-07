@@ -26,6 +26,7 @@
 
 (use-fixtures :once (fn [f] (db/drop-tables! connectable :all) (f)))
 (use-fixtures :each (fn [f] (f) (db/drop-tables! connectable :all)))
+
 ;;; ============================================================================
 ;;; SAVE-RESOURCE! TESTS
 ;;; ============================================================================
@@ -137,7 +138,7 @@
       (is (= #{:core_testing_main :core_testing_observation} tables))
       (is (= #{:resourceType :id :status :subject} obs-columns))
 
-        ;; Verificar que todos los observations tienen sus datos
+      ;; Verificar que todos los observations tienen sus datos
       (doseq [obs obs-with-status-or-subj]
         (let [saved (db/execute-one! connectable
                                      ["SELECT * FROM core_testing_observation WHERE id = ?" (:id obs)])]
@@ -262,7 +263,7 @@
     (let [bad-resources (conj test-resources {:id "bad" :resourceType "Bad" :invalid true})]
       (is (thrown? Exception
                    (crud/save-resources! connectable "core_testing" bad-resources)))
-        ;; Verificar que NO se guardó nada
+      ;; Verificar que NO se guardó nada
       (is (empty? (filter #(re-find #"core_testing" (name %)) (db/get-tables connectable)))))))
 
  ;;; ============================================================================
@@ -284,7 +285,7 @@
     (let [patients (filter #(= (:resourceType %) "Patient") test-resources)]
       (crud/save-resources! connectable "test" :single [:gender :active] patients)
 
-        ;; Buscar pacientes activos
+      ;; Buscar pacientes activos
       (let [active-patients (crud/search-resources connectable "test" "Patient"
                                                    [[:= :active true]])]
         (is (seq active-patients))
@@ -302,7 +303,7 @@
 (deftest test-search-resources-without-specific-table
   (testing "Search works even when specific resource table doesn't exist"
     (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
-        ;; Guardar sin mapping fields (solo main table)
+      ;; Guardar sin mapping fields (solo main table)
       (crud/save-resource! connectable "test" patient)
 
       (let [found (crud/search-resources connectable "test" "Patient"
@@ -320,180 +321,181 @@
  ;;; DELETE-RESOURCE! TESTS
  ;;; ============================================================================
 
-  (deftest test-delete-resources-basic
-    (testing "Delete resource and verify removal"
-      (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
-        (crud/save-resource! connectable "test" [:gender] patient)
+(deftest test-delete-resources-basic
+  (testing "Delete resource and verify removal"
+    (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
+      (crud/save-resource! connectable "test" [:gender] patient)
 
-        ;; Verificar que existe
-        (let [before (crud/search-resources connectable "test" "Patient"
-                                            [[:= :resource_id (:id patient)]])]
-          (is (= 1 (count before))))
+      ;; Verificar que existe
+      (let [before (crud/search-resources connectable "test" "Patient"
+                                          [[:= :resource_id (:id patient)]])]
+        (is (= 1 (count before))))
 
-        ;; Eliminar
-        (crud/delete-resource! connectable "test" "Patient" (:id patient))
+      ;; Eliminar
+      (crud/delete-resource! connectable "test" "Patient" (:id patient))
 
-        ;; Verificar que ya no existe
-        (let [after (crud/search-resources connectable "test" "Patient"
-                                           [[:= :resource_id (:id patient)]])]
-          (is (empty? after))))))
+      ;; Verificar que ya no existe
+      (let [after (crud/search-resources connectable "test" "Patient"
+                                         [[:= :resource_id (:id patient)]])]
+        (is (empty? after))))))
 
-  (deftest test-delete-resources-multiple
-    (testing "Delete multiple resources matching conditions"
-      (let [patients (filter #(= (:resourceType %) "Patient") test-resources)]
-        (crud/save-resources! connectable "test" :single [:active] patients)
+(deftest test-delete-resources-multiple
+  (testing "Delete multiple resources matching conditions"
+    (let [patients (filter #(= (:resourceType %) "Patient") test-resources)]
+      (crud/save-resources! connectable "test" :single [:active] patients)
 
-        ;; Eliminar todos los pacientes activos
-        (let [active-patients (crud/search-resources connectable "test" "Patient" [[:= :active true]])]
-          (doseq [patient active-patients]
-            (crud/delete-resource! connectable "test" "Patient" (:id patient))))
-      
+      ;; Eliminar todos los pacientes activos
+      (let [active-patients (crud/search-resources connectable "test" "Patient" [[:= :active true]])]
+        (doseq [patient active-patients]
+          (crud/delete-resource! connectable "test" "Patient" (:id patient))))
 
-        ;; Verificar que se eliminaron
-        (let [remaining (crud/search-resources connectable "test" "Patient" [])]
-          (is (every? #(not= true (:active %)) remaining))))))
 
-  (deftest test-delete-resources-no-match
-    (testing "Delete returns nil when no resources match"
-      (crud/save-resource! connectable "test" (first test-resources))
+      ;; Verificar que se eliminaron
+      (let [remaining (crud/search-resources connectable "test" "Patient" [])]
+        (is (every? #(not= true (:active %)) remaining))))))
 
-      (let [result (crud/delete-resource! connectable "test" "Patient" "non-existent")]
-        (is (nil? result)))))
+(deftest test-delete-resources-no-match
+  (testing "Delete returns nil when no resources match"
+    (crud/save-resource! connectable "test" (first test-resources))
 
-  (deftest test-delete-resources-error-handling
-    (testing "Throws on invalid id parameter"
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"id must be a non-empty string"
-                            (crud/delete-resource! connectable "test" "Patient" "")))))
+    (let [result (crud/delete-resource! connectable "test" "Patient" "non-existent")]
+      (is (nil? result)))))
 
-(comment
- ;;; ============================================================================
- ;;; UPDATE-RESOURCE! TESTS
- ;;; ============================================================================
+(deftest test-delete-resources-error-handling
+  (testing "Throws on invalid id parameter"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"id must be a non-empty string"
+                          (crud/delete-resource! connectable "test" "Patient" "")))))
 
-  (deftest test-update-resource-basic
-    (testing "Update resource and verify changes"
-      (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))
-            updated-patient (assoc patient :gender "other" :active false)]
 
-        (crud/save-resource! connectable "test" [:gender :active] patient)
+;;; ============================================================================
+;;; UPDATE-RESOURCE! TESTS
+;;; ============================================================================
 
-        ;; Actualizar
-        (let [result (crud/update-resource! connectable "test" "Patient"
-                                            (:id patient) updated-patient)]
-          (is (= updated-patient (first result))))
+(deftest test-update-resource-basic
+  (testing "Update resource and verify changes"
+    (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))
+          updated-patient (assoc patient :gender "other" :active false)]
 
-        ;; Verificar en BD
-        (let [saved (db/execute-one! connectable
-                                     ["SELECT * FROM test_patient WHERE id = ?" (:id patient)])]
-          (is (= "other" (:test_patient/gender saved)))
-          (is (= false (:test_patient/active saved)))))))
+      (crud/save-resource! connectable "test" [:gender :active] patient)
 
-  (deftest test-update-resource-main-table-only
-    (testing "Update resource with no specific table"
-      (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))
-            updated-patient (assoc patient :name [{:family "Updated"}])]
+      ;; Actualizar
+      (let [result (crud/update-resource! connectable "test" "Patient"
+                                          (:id patient) updated-patient)]
+        (is (= updated-patient (first result))))
 
-        ;; Guardar sin campos específicos
-        (crud/save-resource! connectable "test" patient)
+      ;; Verificar en BD
+      (let [saved (db/execute-one! connectable
+                                   ["SELECT * FROM test_patient WHERE id = ?" (:id patient)])]
+        (is (= "other" (:test_patient/gender saved)))
+        (is (= false (:test_patient/active saved)))))))
 
-        ;; Actualizar
-        (let [result (crud/update-resource! connectable "test" "Patient"
-                                            (:id patient) updated-patient)]
-          (is (= updated-patient (first result))))
+(deftest test-update-resource-main-table-only
+  (testing "Update resource with no specific table"
+    (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))
+          updated-patient (assoc patient :name [{:family "Updated"}])]
 
-        ;; Verificar en main table
-        (let [found (crud/search-resources connectable "test" "Patient"
-                                           [[:= :resource_id (:id patient)]])]
-          (is (= updated-patient (first found)))))))
+      ;; Guardar sin campos específicos
+      (crud/save-resource! connectable "test" patient)
 
-  (deftest test-update-resource-error-handling
-    (testing "Throws on mismatched resourceType"
-      (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))
-            wrong-type (assoc patient :resourceType "Observation")]
-        (crud/save-resource! connectable "test" patient)
+      ;; Actualizar
+      (let [result (crud/update-resource! connectable "test" "Patient"
+                                          (:id patient) updated-patient)]
+        (is (= updated-patient (first result))))
 
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                              #"must have the same :id and :resourceType"
-                              (crud/update-resource! connectable "test" "Patient"
-                                                     (:id patient) wrong-type)))))
+      ;; Verificar en main table
+      (let [found (crud/search-resources connectable "test" "Patient"
+                                         [[:= :resource_id (:id patient)]])]
+        (is (= updated-patient (first found)))))))
 
-    (testing "Throws on mismatched id"
-      (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))
-            wrong-id (assoc patient :id "different-id")]
-        (crud/save-resource! connectable "test" patient)
+(deftest test-update-resource-error-handling
+  (testing "Throws on mismatched resourceType"
+    (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))
+          wrong-type (assoc patient :resourceType "Observation")]
+      (crud/save-resource! connectable "test" patient)
 
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                              #"must have the same :id and :resourceType"
-                              (crud/update-resource! connectable "test" "Patient"
-                                                     (:id patient) wrong-id)))))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"must have the same :id and :resourceType"
+                            (crud/update-resource! connectable "test" "Patient"
+                                                   (:id patient) wrong-type))))
+    (db/drop-tables! connectable :all))
 
-    (testing "Throws on invalid new-content"
-      (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
-        (crud/save-resource! connectable "test" patient)
+  (testing "Throws on mismatched id"
+    (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))
+          wrong-id (assoc patient :id "different-id")]
+      (crud/save-resource! connectable "test" patient)
 
-        (is (thrown? Exception
-                     (crud/update-resource! connectable "test" "Patient"
-                                            (:id patient) {:invalid "resource"}))))))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"must have the same :id and :resourceType"
+                            (crud/update-resource! connectable "test" "Patient"
+                                                   (:id patient) wrong-id))))
+    (db/drop-tables! connectable :all))
 
-  (deftest test-update-resource-non-existent
-    (testing "Returns nil when updating non-existent resource"
-      (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
-        (let [result (crud/update-resource! connectable "test" "Patient"
-                                            "non-existent-id" (assoc patient :id "non-existent-id"))]
-          (is (nil? result))))))
+  (testing "Throws on invalid new-content"
+    (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
+      (crud/save-resource! connectable "test" patient)
 
- ;;; ============================================================================
- ;;; INTEGRATION TESTS
- ;;; ============================================================================
+      (is (thrown? Exception
+                   (crud/update-resource! connectable "test" "Patient"
+                                          (:id patient) {:invalid "resource"}))))
+    (db/drop-tables! connectable :all)))
 
-  (deftest test-full-crud-cycle
-    (testing "Complete CRUD cycle: save, search, update, delete"
-      (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))
-            updated-patient (assoc patient :active false)]
+(deftest test-update-resource-non-existent
+  (testing "Returns nil when updating non-existent resource"
+    (let [patients (filter #(= (:resourceType %) "Patient") test-resources)]
+      (crud/save-resources! connectable "test" patients)
+      (is (nil? (crud/update-resource! connectable "test" "Patient"
+                                       "non-existent-id" (assoc (first patients) :id "non-existent-id")))))))
 
-        ;; CREATE
-        (crud/save-resource! connectable "test" [:active :gender] patient)
+;;; ============================================================================
+;;; INTEGRATION TESTS
+;;; ============================================================================
 
-        ;; READ
-        (let [found (crud/search-resources connectable "test" "Patient"
-                                           [[:= :resource_id (:id patient)]])]
-          (is (= 1 (count found)))
-          (is (= patient (first found))))
+(deftest test-full-crud-cycle
+  (testing "Complete CRUD cycle: save, search, update, delete"
+    (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))
+          updated-patient (assoc patient :active false)]
 
-        ;; UPDATE
-        (crud/update-resource! connectable "test" "Patient" (:id patient) updated-patient)
-        (let [found (crud/search-resources connectable "test" "Patient"
-                                           [[:= :resource_id (:id patient)]])]
-          (is (= false (:active (first found)))))
+      ;; CREATE
+      (crud/save-resource! connectable "test" [:active :gender] patient)
 
-        ;; DELETE
-        (crud/delete-resources! connectable "test" "Patient"
-                                [[:= :resource_id (:id patient)]])
-        (let [found (crud/search-resources connectable "test" "Patient"
-                                           [[:= :resource_id (:id patient)]])]
-          (is (empty? found))))))
+      ;; READ
+      (let [found (crud/search-resources connectable "test" "Patient"
+                                         [[:= :resource_id (:id patient)]])]
+        (is (= 1 (count found)))
+        (is (= patient (first found))))
 
-  (deftest test-multiple-resources-different-types
-    (testing "Handle multiple resource types in same database"
-      (crud/save-resources! connectable "test" :specialized
-                            {:patient [:active]
-                             :observation [:status]
-                             :condition [:defaults]}
-                            test-resources)
+      ;; UPDATE
+      (crud/update-resource! connectable "test" "Patient" (:id patient) updated-patient)
+      (let [found (crud/search-resources connectable "test" "Patient"
+                                         [[:= :resource_id (:id patient)]])]
+        (is (= false (:active (first found)))))
 
-      ;; Verificar cada tipo
-      (let [patients (crud/search-resources connectable "test" "Patient" [])
-            observations (crud/search-resources connectable "test" "Observation" [])
-            conditions (crud/search-resources connectable "test" "Condition" [])]
+      ;; DELETE
+      (crud/delete-resource! connectable "test" "Patient" (:id patient))
+      (let [found (crud/search-resources connectable "test" "Patient"
+                                         [[:= :resource_id (:id patient)]])]
+        (is (empty? found))))))
 
-        (is (= 3 (count patients)))
-        (is (= 3 (count observations)))
-        (is (= 2 (count conditions)))
+(deftest test-multiple-resources-different-types
+  (testing "Handle multiple resource types in same database"
+    (crud/save-resources! connectable "test" :specialized
+                          {:patient [:active]
+                           :observation [:status]
+                           :condition [:defaults]}
+                          test-resources)
 
-        ;; Verificar que cada uno tiene su estructura correcta
-        (is (every? #(contains? % :active) patients))
-        (is (every? #(contains? % :status) observations))
-        (is (every? #(contains? % :meta) conditions)))))
+    ;; Verificar cada tipo
+    (let [patients (crud/search-resources connectable "test" "Patient" [])
+          observations (crud/search-resources connectable "test" "Observation" [])
+          conditions (crud/search-resources connectable "test" "Condition" [])]
 
-  :.)
+      (is (= 3 (count patients)))
+      (is (= 3 (count observations)))
+      (is (= 2 (count conditions)))
+
+      ;; Verificar que cada uno tiene su estructura correcta
+      (is (every? #(contains? % :active) patients))
+      (is (= 2 (count (filter :status observations))))
+      (is (= 1 (count (filter :meta conditions)))))))
+
 

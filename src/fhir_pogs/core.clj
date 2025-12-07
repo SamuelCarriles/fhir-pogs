@@ -233,7 +233,7 @@
   [table-prefix restype conditions]
   (let [table (keyword (str table-prefix "_" (.toLowerCase restype)))
         main (keyword (str table-prefix "_main"))
-        all-cond (into [:and [:= (keyword "m.resourceType") restype]] conditions)]
+        all-cond (into [:and [:= :m.resourceType restype]] conditions)]
     {:table table
      :main main
      :conditions all-cond}))
@@ -259,10 +259,12 @@
                      :got (-> conditions type .getSimpleName)})))
 
   (let [{:keys [table main conditions]} (build-search-query table-prefix restype conditions)
-        query (if (contains? (db/get-tables connectable) table)
+        query (if (and (> (count conditions) 2) (contains? (db/get-tables connectable) table))
                 (-> (help/select :content)
                     (help/from [main :m])
-                    (help/join table [:= :resource_id :id])
+                    (help/join [table :t] [:and 
+                                           [:= :m.resource_id :t.id]
+                                           [:= :m.resourceType :t.resourceType]])
                     (help/where conditions)
                     (sql/format {:quoted true}))
                 (-> (help/select :content)
@@ -318,10 +320,6 @@
   ;;Validation
   (v/validate-db-connectable connectable)
 
-  (when (or (not (:id new-content))
-            (not (v/valid-resource? new-content)))
-    (v/validate-resource new-content))
-
   (when (or (not= restype (:resourceType new-content))
             (not= id (:id new-content)))
     (throw (ex-info "The new-content arg must have the same :id and :resourceType as the resource to be updated"
@@ -333,7 +331,10 @@
                                  ":resourceType"
                                  ":id"))})))
 
-  (when (seq (search-resources connectable table-prefix restype [[:= :resource_id id] [:= :resourceType restype]]))
+  (when (not (v/valid-resource? new-content))
+   (v/validate-resource new-content))
+
+  (when (seq (search-resources connectable table-prefix restype [[:= :resource_id id]]))
     (let [main (keyword (str table-prefix "_main"))
           table (keyword (str table-prefix "_" (.toLowerCase restype)))
           columns (remove #{:resourceType :id} (db/get-columns connectable (name table)))
@@ -351,5 +352,17 @@
                                (sql/format
                                 {:quoted true}))]
                           [base-sentence])]
-      (mapper/return-value-process (db/transact! connectable full-sentence)))))
+      (when-let [returned (db/transact! connectable full-sentence)]
+        (mapper/return-value-process returned)))))
 
+(comment
+  
+  (-> (help/select :content)
+      (help/from ["test_main" :m])
+      (help/join ["test_observations" :t] [:and
+                             [:= :resource_id :id]
+                             [:= :m.resourceType :t.resourceType]])
+      (help/where [])
+      (sql/format {:quoted true :inline true}))
+  
+  :.)
