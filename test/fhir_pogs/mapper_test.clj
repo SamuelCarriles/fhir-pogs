@@ -1,5 +1,6 @@
 (ns fhir-pogs.mapper-test
    (:require [clojure.test :refer [deftest is testing run-tests]]
+             [clojure.string :as str]
              [fhir-pogs.mapper :as mapper]
              [cheshire.core :as json])
    (:import [org.postgresql.util PGobject]))
