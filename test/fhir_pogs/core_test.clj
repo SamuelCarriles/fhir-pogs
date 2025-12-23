@@ -1,5 +1,6 @@
 (ns fhir-pogs.core-test
   (:require [clojure.test :refer [deftest testing is use-fixtures]]
+            [fhir-pogs.test-utils :as test-utils]
             [fhir-pogs.db :as db]
             [fhir-pogs.core :as crud]
             [cheshire.core :refer [parse-string]]
@@ -24,8 +25,8 @@
       :uri
       get-datasource))
 
-(use-fixtures :once (fn [f] (db/drop-tables! connectable :all) (f)))
-(use-fixtures :each (fn [f] (f) (db/drop-tables! connectable :all)))
+(use-fixtures :once (fn [f] (test-utils/drop-all-tables! connectable) (f)))
+(use-fixtures :each (fn [f] (f) (test-utils/drop-all-tables! connectable)))
 
 ;;; ============================================================================
 ;;; SAVE-RESOURCE! TESTS
@@ -417,7 +418,7 @@
                             #"must have the same :id and :resourceType"
                             (crud/update-resource! connectable "test" "Patient"
                                                    (:id patient) wrong-type))))
-    (db/drop-tables! connectable :all))
+    (test-utils/drop-all-tables! connectable))
 
   (testing "Throws on mismatched id"
     (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))
@@ -428,7 +429,7 @@
                             #"must have the same :id and :resourceType"
                             (crud/update-resource! connectable "test" "Patient"
                                                    (:id patient) wrong-id))))
-    (db/drop-tables! connectable :all))
+    (test-utils/drop-all-tables! connectable))
 
   (testing "Throws on invalid new-content"
     (let [patient (first (filter #(= (:resourceType %) "Patient") test-resources))]
@@ -437,7 +438,7 @@
       (is (thrown? Exception
                    (crud/update-resource! connectable "test" "Patient"
                                           (:id patient) {:invalid "resource"}))))
-    (db/drop-tables! connectable :all)))
+    (test-utils/drop-all-tables! connectable)))
 
 (deftest test-update-resource-non-existent
   (testing "Returns nil when updating non-existent resource"

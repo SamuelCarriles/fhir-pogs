@@ -2,7 +2,7 @@
   (:require [next.jdbc :as jdbc]
             [honey.sql.helpers :as help]
             [honey.sql :as sql]
-            [clojure.set :as set]))
+            [hikari-cp.core :refer [make-datasource]]))
 ;;Execution functions
 (defn execute!
   "Execute a SQL statement against the database."
@@ -77,35 +77,25 @@
                        :error (.getMessage e)})))))
 
 ;; Table management functions
-(defn drop-tables!
-  "Drop one or more tables from the database. If you want to drop all, use `:all` as second argument."
-  [connectable table-names]
-  (let [existing-tables (get-tables connectable)
-        tables-to-drop (if (= :all table-names)
-                         existing-tables
-                         (set (map keyword table-names)))
-        missing-tables (set/difference tables-to-drop existing-tables)]
-
-    (when (seq missing-tables)
-      (throw (ex-info "Some tables don't exist"
-                      {:missing-tables missing-tables
-                       :existing-tables existing-tables})))
-
-    (when (seq tables-to-drop)
-      (execute! connectable
-                (-> (apply help/drop-table tables-to-drop)
-                    sql/format)))))
 
 (defn table-exists?
   "Check if a table exists in the database."
   [connectable table-name]
-  {:pre [(keyword? table-name)]}
+  {:pre [(keyword? table-name)
+         (some? connectable)]}
   (contains? (get-tables connectable) table-name))
 
-(defn tables-exist?
-  "Check if all specified tables exist in the database."
-  [connectable table-names]
-  {:pre [(every? keyword? table-names)]}
-  (let [existing-tables (get-tables connectable)
-        requested-tables (set table-names)]
-    (set/subset? requested-tables existing-tables)))
+(defn create-datasource
+  "Creates a HikariCP datasource from jdbc-url and options."
+  ([jdbc-url] (create-datasource jdbc-url {}))
+  ([jdbc-url options]
+   (make-datasource
+    (merge {:jdbc-url jdbc-url
+            :maximum-pool-size 10
+            :minimum-idle 2
+            :connection-timeout 30000
+            :idle-timeout 600000
+            :max-lifetime 1800000
+            :validation-timeout 5000}
+           options))))
+

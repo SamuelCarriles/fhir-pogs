@@ -1,24 +1,6 @@
 (ns fhir-pogs.search.modifiers
-  (:require [clj-http.client :as http]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [honey.sql.helpers :as h]))
-
-(def terminology-server "https://tx.fhir.org/r4")
-
-(defn expand-valueset [valueset-url]
-  (try
-    (let [response (http/get (str terminology-server "/ValueSet/$expand")
-                             {:query-params {:url valueset-url}
-                              :accept :json
-                              :as :json
-                              :timeout 10000})]
-      (:body response))
-    (catch Exception e (println (str "Error: " (.getMessage e)))
-           nil)))
-
-(defn get-valueset-codes [url]
-  (->> (get-in (expand-valueset url) [:expansion :contains])
-       (map :code)))
 
 (defn jsonb-path-exists
   ([path]

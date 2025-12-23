@@ -1,4 +1,4 @@
-(ns fhir-pogs.search.migrations
+(ns fhir-pogs.migrations
   (:require [migratus.core :as mig]))
 
 (def config {:store :database
@@ -6,13 +6,13 @@
 
 (defn migrate!
   "Apply all pending migrations"
-  [db-spec]
-  (mig/migrate (assoc config :db db-spec)))
+  [connectable]
+  (mig/migrate (assoc config :db connectable)))
 
 (defn rollback!
   "Roll back the last applied migration"
-  [db-spec]
-  (mig/rollback (assoc config :db db-spec)))
+  [connectable]
+  (mig/rollback (assoc config :db connectable)))
 
 (defn create!
   "Create a new migration"
@@ -21,6 +21,6 @@
 
 (defn pending
   "List all pending migrations"
-  [db-spec]
-  (mig/pending-list (assoc config :db db-spec)))
+  [connectable]
+  (mig/pending-list (assoc config :db connectable)))
 

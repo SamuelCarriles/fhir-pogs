@@ -13,8 +13,9 @@
         luposlip/json-schema {:mvn/version "0.4.6"}
         clj-http/clj-http {:mvn/version "3.13.1"}
         migratus/migratus {:mvn/version "1.6.4"}
+        hikari-cp/hikari-cp {:mvn/version "3.3.0"}
         com.github.guijealth/config {:git/tag "0.1.0-SNAPSHOT", :git/sha "08d4c8a"}
-        com.github.guijealth/fhir-search {:git/sha "9d15964fa70f2ae5dd58d531acd5662547caa8dd"}}
+        com.github.guijealth/fhir-search {:git/sha "01ed3547246c70a901eb5170251f785518c714f7"}}
  :aliases {:test {:extra-paths ["test"]
                   :extra-deps {io.github.cognitect-labs/test-runner
                                {:git/tag "v0.5.0" :git/sha "b3fd0d2"}}
