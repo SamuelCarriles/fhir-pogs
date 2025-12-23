@@ -77,35 +77,14 @@
                        :error (.getMessage e)})))))
 
 ;; Table management functions
-(defn drop-tables!
-  "Drop one or more tables from the database. If you want to drop all, use `:all` as second argument."
-  [connectable table-names]
-  (let [existing-tables (get-tables connectable)
-        tables-to-drop (if (= :all table-names)
-                         existing-tables
-                         (set (map keyword table-names)))
-        missing-tables (set/difference tables-to-drop existing-tables)]
-
-    (when (seq missing-tables)
-      (throw (ex-info "Some tables don't exist"
-                      {:missing-tables missing-tables
-                       :existing-tables existing-tables})))
-
-    (when (seq tables-to-drop)
-      (execute! connectable
-                (-> (apply help/drop-table tables-to-drop)
-                    sql/format)))))
 
 (defn table-exists?
   "Check if a table exists in the database."
   [connectable table-name]
-  {:pre [(keyword? table-name)]}
+  {:pre [(keyword? table-name)
+         (some? connectable)]}
   (contains? (get-tables connectable) table-name))
 
-(defn tables-exist?
-  "Check if all specified tables exist in the database."
-  [connectable table-names]
-  {:pre [(every? keyword? table-names)]}
-  (let [existing-tables (get-tables connectable)
-        requested-tables (set table-names)]
-    (set/subset? requested-tables existing-tables)))
+(comment
+  
+  :.)

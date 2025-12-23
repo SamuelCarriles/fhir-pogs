@@ -14,25 +14,17 @@
 (defn extract-join [join]
     (when (keyword? join) (-> join name keyword)))
 
-#_(defn string-search-conds  [type path param]
-    (let [join (-> (:join param) extract-join)
-          base (if join [join] [])]
-      (if-let [params (:params param)]
-        (reduce #(->> (modifiers/get-string-data-cond path (:modifier %2) (:value %2))
-                      (conj %1)) base params)
-        (modifiers/get-string-data-cond path (:modifier param) (:value param)))))
-
-(defn gen-params-cond [db-spec table-prefix type join params]
+(defn gen-params-cond [connectable table-prefix type join params]
     (let [join (extract-join join)]
       (reduce #(let [param-data (param/get-data type (:name %2))]
                  (->> (case (:data-type param-data)
                         :string [] #_(conj %1 (string-search-conds type (:path param-data) %2))
-                        :token (token-search-conds db-spec table-prefix type params)
+                        :token (token-search-conds connectable table-prefix type params)
                         :date [])
                       (into %1)))
               (if (or (< 1 (count params)) (= :or join)) [join] []) params)))
 
-(defn gen-cond-clauses [db-spec table-prefix ast]
+(defn gen-cond-clauses [connectable table-prefix ast]
     (let [type (:type ast)
           id (:id ast)
           join (:join ast)
@@ -41,27 +33,27 @@
           compartment-cond (modifiers/jsonb-path-exists
                             (param/compartment-paths type compartment)
                             (str " ? (@ == \"" (:type compartment) "/" (:id compartment) "\")"))
-          params-cond (gen-params-cond db-spec table-prefix type join params)] 
+          params-cond (gen-params-cond connectable table-prefix type join params)] 
       (-> (conj [[:= :resourceType type]] (when id [:= :resource-id id]) compartment-cond params-cond)
           clean)))
 
-(defn fhir-search [db-spec table-prefix uri]
+(defn fhir-search [connectable table-prefix uri]
     (let [ast (parse uri) 
-          conditions (gen-cond-clauses db-spec table-prefix ast)]
-      (crud/search-resources db-spec table-prefix (:type ast) conditions)))
+          conditions (gen-cond-clauses connectable table-prefix ast)]
+      (crud/search-resources connectable table-prefix (:type ast) conditions)))
 
 (comment
   ;;Tenemos que saber que las clausulas condicionales van a tener este formato:
   ;; [:operador :campo :valor]
   
-  (def db-spec {:dbtype "postgresql"
+  (def connectable {:dbtype "postgresql"
                 :dbname "resources"
                 :host "localhost"
                 :user "postgres"
                 :port "5432"
                 :password "postgres"}) 
 
-  (fhir-search db-spec "fhir" "/Practitioner?gender=male")
+  (fhir-search connectable "fhir" "/Practitioner?gender=male")
   :.
   )
 
