@@ -1,8 +1,7 @@
 (ns fhir-pogs.db
   (:require [next.jdbc :as jdbc]
             [honey.sql.helpers :as help]
-            [honey.sql :as sql]
-            [clojure.set :as set]))
+            [honey.sql :as sql]))
 ;;Execution functions
 (defn execute!
   "Execute a SQL statement against the database."
@@ -84,6 +83,8 @@
   {:pre [(keyword? table-name)
          (some? connectable)]}
   (contains? (get-tables connectable) table-name))
+
+
 
 (comment
   

@@ -1,6 +1,7 @@
 (ns fhir-pogs.core-test
   (:require [clojure.test :refer [deftest testing is use-fixtures]]
             [fhir-pogs.test-utils :as test-utils]
+            [fhir-pogs.db :as db]
             [fhir-pogs.core :as crud]
             [cheshire.core :refer [parse-string]]
             [clojure.java.io :refer [resource]]
