@@ -1,7 +1,8 @@
 (ns fhir-pogs.db
   (:require [next.jdbc :as jdbc]
             [honey.sql.helpers :as help]
-            [honey.sql :as sql]))
+            [honey.sql :as sql]
+            [hikari-cp.core :refer [make-datasource]]))
 ;;Execution functions
 (defn execute!
   "Execute a SQL statement against the database."
@@ -84,8 +85,17 @@
          (some? connectable)]}
   (contains? (get-tables connectable) table-name))
 
+(defn create-datasource
+  "Creates a HikariCP datasource from jdbc-url and options."
+  ([jdbc-url] (create-datasource jdbc-url {}))
+  ([jdbc-url options]
+   (make-datasource
+    (merge {:jdbc-url jdbc-url
+            :maximum-pool-size 10
+            :minimum-idle 2
+            :connection-timeout 30000
+            :idle-timeout 600000
+            :max-lifetime 1800000
+            :validation-timeout 5000}
+           options))))
 
-
-(comment
-  
-  :.)
